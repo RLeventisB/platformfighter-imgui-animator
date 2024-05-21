@@ -1,7 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Drawing;
-using System.Drawing.Imaging;
 using System.IO;
 using System.Net.Mime;
 using System.Runtime.InteropServices;
@@ -39,17 +37,17 @@ namespace Editor.Gui
         private Dictionary<IntPtr, Texture2D> _loadedTextures;
 
         private int _textureId;
-        private IntPtr? _fontTextureId;
+        public IntPtr? fontTextureId;
 
         // Input
         private int _scrollWheelValue;
 
-        private List<int> _keys = new List<int>();
+        private List<(ImGuiKey guiKey, Keys xnaKey)> _keys = new List<(ImGuiKey, Keys)>();
 
         public ImGuiRenderer(Game game)
         {
-            var context = ImGuiNET.ImGui.CreateContext();
-            ImGuiNET.ImGui.SetCurrentContext(context);
+            var context = ImGui.CreateContext();
+            ImGui.SetCurrentContext(context);
 
             _game = game ?? throw new ArgumentNullException(nameof(game));
             _graphicsDevice = game.GraphicsDevice;
@@ -77,26 +75,32 @@ namespace Editor.Gui
         public virtual unsafe void RebuildFontAtlas()
         {
             // Get font texture from ImGui
-            var io = ImGuiNET.ImGui.GetIO();
+            var io = ImGui.GetIO();
             io.Fonts.GetTexDataAsRGBA32(out byte* pixelData, out int width, out int height, out int bytesPerPixel);
 
             // Copy the data to a managed array
             var pixels = new byte[width * height * bytesPerPixel];
-            unsafe { Marshal.Copy(new IntPtr(pixelData), pixels, 0, pixels.Length); }
+            Marshal.Copy((nint)pixelData, pixels, 0, pixels.Length);
 
             // Create and register the texture as an XNA texture
             var tex2d = new Texture2D(_graphicsDevice, width, height, false, SurfaceFormat.Color);
             tex2d.SetData(pixels);
+            using (FileStream stream = File.OpenWrite("./singlebiome.png"))
+            {
+                tex2d.SaveAsPng(stream, width, height);
+            }
 
             // Should a texture already have been build previously, unbind it first so it can be deallocated
-            if (_fontTextureId.HasValue) UnbindTexture(_fontTextureId.Value);
+            if (fontTextureId.HasValue) UnbindTexture(fontTextureId.Value);
 
             // Bind the new texture to an ImGui-friendly id
-            _fontTextureId = BindTexture(tex2d);
+            fontTextureId = BindTexture(tex2d);
 
             // Let ImGui know where to find the texture
-            io.Fonts.SetTexID(_fontTextureId.Value);
+            io.Fonts.SetTexID(fontTextureId.Value);
             io.Fonts.ClearTexData(); // Clears CPU side texture data
+            // io.Fonts.Build();
+
         }
 
         /// <summary>
@@ -124,11 +128,11 @@ namespace Editor.Gui
         /// </summary>
         public virtual void BeforeLayout(GameTime gameTime)
         {
-            ImGuiNET.ImGui.GetIO().DeltaTime = (float)gameTime.ElapsedGameTime.TotalSeconds;
+            ImGui.GetIO().DeltaTime = (float)gameTime.ElapsedGameTime.TotalSeconds;
 
             UpdateInput();
 
-            ImGuiNET.ImGui.NewFrame();
+            ImGui.NewFrame();
         }
 
         /// <summary>
@@ -136,9 +140,9 @@ namespace Editor.Gui
         /// </summary>
         public virtual void AfterLayout()
         {
-            ImGuiNET.ImGui.Render();
+            ImGui.Render();
 
-            unsafe { RenderDrawData(ImGuiNET.ImGui.GetDrawData()); }
+            RenderDrawData(ImGui.GetDrawData());
         }
 
         #endregion ImGuiRenderer
@@ -148,30 +152,40 @@ namespace Editor.Gui
         /// <summary>
         /// Maps ImGui keys to XNA keys. We use this later on to tell ImGui what keys were pressed
         /// </summary>
-        protected virtual void SetupInput()
+        protected virtual unsafe void SetupInput()
         {
-            var io = ImGuiNET.ImGui.GetIO();
-            var rangeAccessor = io.KeyMap;
+            var io = ImGui.GetIO();
+            var rangeAccessor = io.KeysData;
+            void what(ImGuiKey guiKey, Keys xnaKey)
+            {
+                // io.SetKeyEventNativeData(guiKey, )
 
-            _keys.Add(rangeAccessor[(int)ImGuiKey.Tab] = (int)Keys.Tab);
-            _keys.Add(rangeAccessor[(int)ImGuiKey.LeftArrow] = (int)Keys.Left);
-            _keys.Add(rangeAccessor[(int)ImGuiKey.RightArrow] = (int)Keys.Right);
-            _keys.Add(rangeAccessor[(int)ImGuiKey.UpArrow] = (int)Keys.Up);
-            _keys.Add(rangeAccessor[(int)ImGuiKey.DownArrow] = (int)Keys.Down);
-            _keys.Add(rangeAccessor[(int)ImGuiKey.PageUp] = (int)Keys.PageUp);
-            _keys.Add(rangeAccessor[(int)ImGuiKey.PageDown] = (int)Keys.PageDown);
-            _keys.Add(rangeAccessor[(int)ImGuiKey.Home] = (int)Keys.Home);
-            _keys.Add(rangeAccessor[(int)ImGuiKey.End] = (int)Keys.End);
-            _keys.Add(rangeAccessor[(int)ImGuiKey.Delete] = (int)Keys.Delete);
-            _keys.Add(rangeAccessor[(int)ImGuiKey.Backspace] = (int)Keys.Back);
-            _keys.Add(rangeAccessor[(int)ImGuiKey.Enter] = (int)Keys.Enter);
-            _keys.Add(rangeAccessor[(int)ImGuiKey.Escape] = (int)Keys.Escape);
-            _keys.Add(rangeAccessor[(int)ImGuiKey.A] = (int)Keys.A);
-            _keys.Add(rangeAccessor[(int)ImGuiKey.C] = (int)Keys.C);
-            _keys.Add(rangeAccessor[(int)ImGuiKey.V] = (int)Keys.V);
-            _keys.Add(rangeAccessor[(int)ImGuiKey.X] = (int)Keys.X);
-            _keys.Add(rangeAccessor[(int)ImGuiKey.Y] = (int)Keys.Y);
-            _keys.Add(rangeAccessor[(int)ImGuiKey.Z] = (int)Keys.Z);
+                // rangeAccessor[(int)ImGuiKey.Tab - 512].AnalogValue = (int)xnaKey;
+                _keys.Add((guiKey, xnaKey));
+            }
+            what(ImGuiKey.Tab, Keys.Tab);
+            what(ImGuiKey.LeftArrow, Keys.Left);
+            what(ImGuiKey.RightArrow, Keys.Right);
+            what(ImGuiKey.UpArrow, Keys.Up);
+            what(ImGuiKey.DownArrow, Keys.Down);
+            what(ImGuiKey.PageUp, Keys.PageUp);
+            what(ImGuiKey.PageDown, Keys.PageDown);
+            what(ImGuiKey.Home, Keys.Home);
+            what(ImGuiKey.End, Keys.End);
+            what(ImGuiKey.Delete, Keys.Delete);
+            what(ImGuiKey.Backspace, Keys.Back);
+            what(ImGuiKey.Enter, Keys.Enter);
+            what(ImGuiKey.Escape, Keys.Escape);
+            what(ImGuiKey.A, Keys.A);
+            what(ImGuiKey.L, Keys.L);
+            what(ImGuiKey.C, Keys.C);
+            what(ImGuiKey.V, Keys.V);
+            what(ImGuiKey.X, Keys.X);
+            what(ImGuiKey.Y, Keys.Y);
+            what(ImGuiKey.Z, Keys.Z);
+            what(ImGuiKey.H, Keys.H);
+            what(ImGuiKey.V, Keys.V);
+            what(ImGuiKey.W, Keys.W);
 
             // MonoGame-specific //////////////////////
             _game.Window.TextInput += (s, a) =>
@@ -191,7 +205,8 @@ namespace Editor.Gui
             //};
             ///////////////////////////////////////////
 
-            ImGuiNET.ImGui.GetIO().Fonts.AddFontDefault();
+            ImFont* font = ImGui.GetIO().Fonts.AddFontDefault();
+            font->Scale = 1.2f;
         }
 
         /// <summary>
@@ -199,9 +214,9 @@ namespace Editor.Gui
         /// </summary>
         protected virtual Effect UpdateEffect(Texture2D texture)
         {
-            _effect = _effect ?? new BasicEffect(_graphicsDevice);
+            _effect ??= new BasicEffect(_graphicsDevice);
 
-            var io = ImGuiNET.ImGui.GetIO();
+            var io = ImGui.GetIO();
 
             // MonoGame-specific //////////////////////
             var offset = .5f;
@@ -226,16 +241,22 @@ namespace Editor.Gui
         /// </summary>
         protected virtual void UpdateInput()
         {
-            var io = ImGuiNET.ImGui.GetIO();
-
-            var mouse = Mouse.GetState();
-            var keyboard = Keyboard.GetState();
-            var keysDown = io.KeysDown;
+            var io = ImGui.GetIO();
             var mouseDown = io.MouseDown;
+            var mouse = Mouse.GetState();
+            if (!GameApplication.Instance.IsActive)
+            {
+                io.KeyCtrl = io.KeyAlt = io.KeySuper = io.KeyShift = false;
+                mouseDown[0] = mouseDown[1] = mouseDown[2] = false;
+                io.MouseWheel = 0;
+                _scrollWheelValue = mouse.ScrollWheelValue;
+                return;
+            }
+            var keyboard = Keyboard.GetState();
 
             for (int i = 0; i < _keys.Count; i++)
             {
-                keysDown[_keys[i]] = keyboard.IsKeyDown((Keys)_keys[i]);
+                io.AddKeyEvent(_keys[i].guiKey, keyboard.IsKeyDown(_keys[i].xnaKey));
             }
 
             io.KeyShift = keyboard.IsKeyDown(Keys.LeftShift) || keyboard.IsKeyDown(Keys.RightShift);
@@ -264,7 +285,7 @@ namespace Editor.Gui
         /// <summary>
         /// Gets the geometry as set up by ImGui and sends it to the graphics device
         /// </summary>
-        private void RenderDrawData(ImDrawDataPtr drawData)
+        private unsafe void RenderDrawData(ImDrawDataPtr drawData)
         {
             // Setup render state: alpha-blending enabled, no face culling, no depth testing, scissor enabled, vertex/texcoord/color pointers
             var lastViewport = _graphicsDevice.Viewport;
@@ -276,7 +297,7 @@ namespace Editor.Gui
             _graphicsDevice.DepthStencilState = DepthStencilState.DepthRead;
 
             // Handle cases of screen coordinates != from framebuffer coordinates (e.g. retina displays)
-            drawData.ScaleClipRects(ImGuiNET.ImGui.GetIO().DisplayFramebufferScale);
+            drawData.ScaleClipRects(ImGui.GetIO().DisplayFramebufferScale);
 
             // Setup projection
             _graphicsDevice.Viewport = new Viewport(0, 0, _graphicsDevice.PresentationParameters.BackBufferWidth, _graphicsDevice.PresentationParameters.BackBufferHeight);
@@ -322,7 +343,7 @@ namespace Editor.Gui
 
             for (int n = 0; n < drawData.CmdListsCount; n++)
             {
-                ImDrawListPtr cmdList = drawData.CmdListsRange[n];
+                ImDrawListPtr cmdList = drawData.CmdLists[n];
 
                 fixed (void* vtxDstPtr = &_vertexData[vtxOffset * DrawVertexDeclaration.DrawVertDeclaration.Size])
                 fixed (void* idxDstPtr = &_indexData[idxOffset * sizeof(ushort)])
@@ -350,7 +371,7 @@ namespace Editor.Gui
 
             for (int n = 0; n < drawData.CmdListsCount; n++)
             {
-                ImDrawListPtr cmdList = drawData.CmdListsRange[n];
+                ImDrawListPtr cmdList = drawData.CmdLists[n];
 
                 for (int cmdi = 0; cmdi < cmdList.CmdBuffer.Size; cmdi++)
                 {

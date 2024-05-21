@@ -35,18 +35,18 @@ namespace Rune.MonoGame
         public static float EpsilonSmall = 0.000001f;
 
         public static void RaycastImplicitGrid(Vector3 start, Vector3 end,
-            int cellSize, Func<Vector3i, Boolean> visit)
+            int cellSize, Func<Vector3i, bool> visit)
         {
             Vector3i tileCoords = new Vector3i
             {
-                X = (int) Math.Floor(start.X / cellSize),
-                Y = (int) Math.Floor(start.Y / cellSize),
-                Z = (int) Math.Floor(start.Z / cellSize)
+                X = (int)Math.Floor(start.X / cellSize),
+                Y = (int)Math.Floor(start.Y / cellSize),
+                Z = (int)Math.Floor(start.Z / cellSize)
             };
 
-            int endX = (int) Math.Floor(end.X / cellSize);
-            int endY = (int) Math.Floor(end.Y / cellSize);
-            int endZ = (int) Math.Floor(end.Z / cellSize);
+            int endX = (int)Math.Floor(end.X / cellSize);
+            int endY = (int)Math.Floor(end.Y / cellSize);
+            int endZ = (int)Math.Floor(end.Z / cellSize);
 
             int totalTiles = 1 + Math.Abs(endX - tileCoords.X) + Math.Abs(endY - tileCoords.Y) +
                              Math.Abs(endZ - tileCoords.Z);
@@ -195,25 +195,25 @@ namespace Rune.MonoGame
 
         public static Vector3 Floor(this ref Vector3 vector, float dimension)
         {
-            var x = (float) Math.Floor(vector.X * dimension) / dimension;
-            var y = (float) Math.Floor(vector.Y * dimension) / dimension;
-            var z = (float) Math.Floor(vector.Z * dimension) / dimension;
+            var x = (float)Math.Floor(vector.X * dimension) / dimension;
+            var y = (float)Math.Floor(vector.Y * dimension) / dimension;
+            var z = (float)Math.Floor(vector.Z * dimension) / dimension;
             return new Vector3(x, y, z);
         }
 
         public static Vector3 Round(this ref Vector3 vector, float dimension)
         {
-            var x = (float) Math.Round(vector.X * dimension) / dimension;
-            var y = (float) Math.Round(vector.Y * dimension) / dimension;
-            var z = (float) Math.Round(vector.Z * dimension) / dimension;
+            var x = (float)Math.Round(vector.X * dimension) / dimension;
+            var y = (float)Math.Round(vector.Y * dimension) / dimension;
+            var z = (float)Math.Round(vector.Z * dimension) / dimension;
             return new Vector3(x, y, z);
         }
 
         public static Vector3 Ceiling(this ref Vector3 vector, float dimension)
         {
-            var x = (float) Math.Ceiling(vector.X * dimension) / dimension;
-            var y = (float) Math.Ceiling(vector.Y * dimension) / dimension;
-            var z = (float) Math.Ceiling(vector.Z * dimension) / dimension;
+            var x = (float)Math.Ceiling(vector.X * dimension) / dimension;
+            var y = (float)Math.Ceiling(vector.Y * dimension) / dimension;
+            var z = (float)Math.Ceiling(vector.Z * dimension) / dimension;
             return new Vector3(x, y, z);
         }
 

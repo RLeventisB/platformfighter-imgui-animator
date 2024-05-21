@@ -7,16 +7,16 @@ namespace Editor.Model.Converters
 {
     public class TrackConverter : JsonConverter<AnimationTrack>
     {
-        private readonly Dictionary<string, Property> _propertyDefinitions;
+        private readonly IDictionary<string, Property> _propertyDefinitions;
 
-        public TrackConverter(Dictionary<string, Property> propertyDefinitions)
+        public TrackConverter(IDictionary<string, Property> propertyDefinitions)
         {
             _propertyDefinitions = propertyDefinitions;
         }
-        
+
         public override AnimationTrack Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
-            var animationTrack = new AnimationTrack(typeToConvert, String.Empty);
+            var animationTrack = new AnimationTrack(typeToConvert, string.Empty);
             if (reader.TokenType != JsonTokenType.StartObject)
                 throw new JsonException();
             reader.Read();
@@ -27,12 +27,12 @@ namespace Editor.Model.Converters
 
                 var property = _propertyDefinitions[id];
                 animationTrack = new AnimationTrack(property.Type, id);
-                              
+
                 // keyframes
                 if (reader.TokenType != JsonTokenType.PropertyName)
                     throw new JsonException();
                 reader.Read();
-                
+
                 if (reader.TokenType != JsonTokenType.StartArray)
                     throw new JsonException();
 
@@ -41,7 +41,7 @@ namespace Editor.Model.Converters
                 {
                     if (reader.TokenType == JsonTokenType.EndArray)
                         break;
-                    
+
                     if (reader.TokenType != JsonTokenType.StartObject)
                         throw new JsonException();
                     reader.Read();
@@ -49,21 +49,21 @@ namespace Editor.Model.Converters
                         // frame
                         var frame = reader.ReadIntegerProperty(nameof(dummyKeyframe.Frame));
                         reader.Read();
-                        
+
                         // value
                         if (reader.TokenType != JsonTokenType.PropertyName)
                             throw new JsonException();
                         reader.Read();
-                        
+
                         var value = JsonSerializer.Deserialize(ref reader, property.Type, options);
                         reader.Read();
-                        
+
                         animationTrack.Add(new Keyframe(frame, value));
                     }
                     if (reader.TokenType != JsonTokenType.EndObject)
                         throw new JsonException();
                 }
-                
+
                 if (reader.TokenType != JsonTokenType.EndArray)
                     throw new JsonException();
                 reader.Read();

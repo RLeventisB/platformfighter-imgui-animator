@@ -5,8 +5,8 @@ namespace Editor.Model
     public class Property
     {
         private readonly string _id;
-
         public Type Type { get; }
+        public string Id => _id;
 
         public Property(string id, Type type)
         {
@@ -28,7 +28,7 @@ namespace Editor.Model
         {
             return _id.GetHashCode();
         }
-        
+
         public static implicit operator string(Property property)
         {
             return property._id;

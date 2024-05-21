@@ -1,20 +1,19 @@
 ﻿using System;
 using ImGuiNET;
-using NVector2 = System.Numerics.Vector2;
 
 namespace Editor.Gui
 {
     public partial class ImGuiEx
     {
         private static int selectedTexture = 0;
-        private static string spriteName = String.Empty;
+        private static string spriteName = string.Empty;
 
         public static void DoEntityCreatorReset()
         {
             selectedTexture = 0;
             spriteName = "Sprite" + new Random().Next();
         }
-        
+
         public static void DoEntityCreatorModal(string[] textureNames, Action<string, string> onCreatePressed)
         {
             var open_create_sprite = true;
@@ -22,11 +21,32 @@ namespace Editor.Gui
             var frameHeight = ch.Y - (ImGui.GetTextLineHeight() + ImGui.GetStyle().WindowPadding.Y * 1.5f);
             if (ImGui.BeginPopupModal("Create entity", ref open_create_sprite, ImGuiWindowFlags.NoResize))
             {
-                ImGui.BeginChildFrame(1337, NVector2.UnitX * 400 + NVector2.UnitY * frameHeight);
+                ImGui.BeginChild(1337, NVector2.UnitX * 400 + NVector2.UnitY * frameHeight, ImGuiChildFlags.FrameStyle);
                 ImGui.InputText("Entity name", ref spriteName, 64);
-                ImGui.ListBox("Textures", ref selectedTexture, textureNames, textureNames.Length);
 
-                ImGui.EndChildFrame();
+                if (ImGui.BeginListBox("listbox 1"))
+                {
+                    for (int j = 0; j < textureNames.Length; j++)
+                    {
+                        bool selected = false;
+                        string textureName = textureNames[j];
+
+                        if (ImGui.Selectable(textureName, ref selected, ImGuiSelectableFlags.AllowDoubleClick))
+                        {
+                            selectedTexture = j;
+                            if (ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
+                            {
+                                onCreatePressed?.Invoke(spriteName, textureName);
+
+                                ImGui.CloseCurrentPopup();
+                                break;
+                            }
+                        }
+                    }
+                    ImGui.EndListBox();
+                }
+
+                ImGui.EndChild();
 
                 if (ImGui.Button("Create entity##2"))
                 {
@@ -34,7 +54,7 @@ namespace Editor.Gui
 
                     ImGui.CloseCurrentPopup();
                 }
-                
+
                 ImGui.EndPopup();
             }
         }

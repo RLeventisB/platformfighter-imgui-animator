@@ -8,9 +8,7 @@ namespace Editor.Gui
         public static class DrawVertDeclaration
         {
             public static readonly VertexDeclaration Declaration;
-
             public static readonly int Size;
-
             static unsafe DrawVertDeclaration()
             {
                 Size = sizeof(ImDrawVert); // ImDrawVert is currently 12 bytes

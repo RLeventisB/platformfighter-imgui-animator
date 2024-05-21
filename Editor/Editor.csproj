@@ -2,20 +2,19 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>netcoreapp3.0</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <MonoGamePlatform>DesktopGL</MonoGamePlatform>
     <Version>0.1</Version>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="ImGui.NET" Version="1.72.0" />
-    <PackageReference Include="MonoGame.Framework.DesktopGL.Core" Version="3.8.0.1" />
-    <PackageReference Include="MonoGame.Content.Builder" Version="3.7.0.9" />
-  </ItemGroup>  
-
-  <ItemGroup>
+    <PackageReference Include="ImGui.NET" Version="1.90.1.1" />
+    <PackageReference Include="MonoGame.Framework.DesktopGL" Version="3.8.1.303" />
+    <!-- <MonoGameContentReference Include="Content\Content.mgcb" /> -->
+    <PackageReference Include="MonoGame.Content.Builder.Task" Version="3.8.1.303" />
     <MonoGameContentReference Include="**\*.mgcb" />
+    <Compile Remove="Model/Converters/*.*" />
   </ItemGroup>
 
   <Target Name="CopyAssets" AfterTargets="Build">
@@ -24,5 +23,5 @@
     </ItemGroup>
     <Copy SourceFiles="@(Data)" DestinationFolder="$(TargetDir)/%(RecursiveDir)" />
   </Target>
-  
+
 </Project>

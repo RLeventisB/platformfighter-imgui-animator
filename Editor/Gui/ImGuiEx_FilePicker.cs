@@ -4,7 +4,6 @@ using System.IO;
 using System.Reflection;
 using ImGuiNET;
 using Microsoft.Xna.Framework;
-using Vector2 = System.Numerics.Vector2;
 
 namespace Editor.Gui
 {
@@ -39,7 +38,9 @@ namespace Editor.Gui
 
             var fp = new FilePickerDefinition
             {
-                RootFolder = "/", CurrentFolder = startingPath, OnlyAllowFolders = onlyAllowFolders,
+                RootFolder = "/",
+                CurrentFolder = startingPath,
+                OnlyAllowFolders = onlyAllowFolders,
                 ActionButtonLabel = actionLabel,
                 executingPath = Path.GetDirectoryName(Assembly.GetEntryAssembly()?.Location)
             };
@@ -51,7 +52,7 @@ namespace Editor.Gui
                 else
                     fp.AllowedExtensions = new List<string>();
 
-                fp.AllowedExtensions.AddRange(searchFilter.Split(new[] {'|'},
+                fp.AllowedExtensions.AddRange(searchFilter.Split(new[] { '|' },
                     StringSplitOptions.RemoveEmptyEntries));
             }
 
@@ -65,7 +66,7 @@ namespace Editor.Gui
 
             var ch = ImGui.GetContentRegionAvail();
             var frameHeight = ch.Y - (ImGui.GetTextLineHeight() * 2 + ImGui.GetStyle().WindowPadding.Y * 3.5f);
-            if (ImGui.BeginChildFrame(1, new Vector2(0, frameHeight),
+            if (ImGui.BeginChild(1, new NVector2(0, frameHeight), ImGuiChildFlags.FrameStyle,
                 ImGuiWindowFlags.ChildWindow | ImGuiWindowFlags.NoResize))
             {
                 var di = new DirectoryInfo(fpDef.CurrentFolder);
@@ -108,34 +109,33 @@ namespace Editor.Gui
                 }
             }
 
-            ImGui.EndChildFrame();
+            ImGui.EndChild();
 
             if (fpDef.OnlyAllowFolders)
             {
                 fpDef.SelectedAbsolutePath = fpDef.CurrentFolder;
                 fpDef.SelectedRelativePath = fpDef.SelectedAbsolutePath.Substring(fpDef.executingPath.Length + 1);
             }
-            else 
+            else
             {
                 if (!string.IsNullOrEmpty(fpDef.SelectedAbsolutePath))
                 {
                     fpDef.SelectedRelativePath = fpDef.SelectedAbsolutePath.Substring(fpDef.executingPath.Length + 1);
                     fpDef.SelectedFileName = Path.GetFileName(fpDef.SelectedAbsolutePath);
                 }
-                
+
                 ImGui.SetNextItemWidth(ch.X);
                 string fileName = fpDef.SelectedFileName ?? string.Empty;
-                ImGui.InputText(String.Empty, ref fileName, 64);
+                ImGui.InputText(string.Empty, ref fileName, 64);
 
-                if(!string.IsNullOrEmpty(fileName))
+                if (!string.IsNullOrEmpty(fileName))
                 {
                     fpDef.SelectedAbsolutePath = Path.Combine(fpDef.CurrentFolder, fileName);
-                    fpDef.SelectedRelativePath =
-                        Path.Combine(Path.GetDirectoryName(fpDef.SelectedRelativePath), fileName);
+                    fpDef.SelectedRelativePath = Path.Combine(Path.GetDirectoryName(fpDef.SelectedRelativePath ?? fpDef.CurrentFolder), fileName);
                 }
             }
-            
-            if (ImGui.Button("Cancel"))
+
+            if (ImGui.Button("Cancel") || ImGui.IsKeyPressed(ImGuiKey.Escape))
             {
                 result = false;
                 ImGui.CloseCurrentPopup();

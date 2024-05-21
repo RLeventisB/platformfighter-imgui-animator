@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using Editor.Gui;
 using Editor.Model.Interpolators;
+using ImGuiNET;
 
 namespace Editor.Model
 {
@@ -10,13 +12,12 @@ namespace Editor.Model
         private readonly Dictionary<string, HashSet<int>> _groups;
         private readonly Dictionary<int, AnimationTrack> _tracks;
 
-        public event Action OnKeyframeChanged;
+        public Action OnKeyframeChanged;
 
         private int _currentKeyframe;
-        private int _framesPerSecond = 24;
-        private float _frameTime = 1.0f / 24f;
+        private int _framesPerSecond = 120;
+        private float _frameTime = 1.0f / 120f;
         private float _frameTimer = 0f;
-        
         private bool _isPlayingBackward;
         private bool _isPlayingForward;
         private bool _isLooping;
@@ -49,14 +50,15 @@ namespace Editor.Model
         public bool Playing => _isPlayingBackward || _isPlayingForward;
 
         public bool PlayingBackward => _isPlayingBackward;
-        
+
         public bool PlayingForward => _isPlayingForward;
 
         public Animator()
         {
-            _groups = new Dictionary<string, HashSet<int>>(1024);
-            _tracks = new Dictionary<int, AnimationTrack>(1024);
+            _groups = new Dictionary<string, HashSet<int>>();
+            _tracks = new Dictionary<int, AnimationTrack>();
             _interpolators = new Dictionary<Type, IInterpolator>(8);
+            FPS = 120;
         }
 
         public void AddInterpolator<T>(Func<float, T, T, T> interpolator)
@@ -97,12 +99,11 @@ namespace Editor.Model
                 _isPlayingBackward = false;
 
             _isPlayingForward = !_isPlayingForward;
-            _frameTime = 0.0f;
         }
 
         public void Stop()
         {
-            _frameTime = 0.0f;
+            // _frameTime = 0.0f;
             _isPlayingForward = _isPlayingBackward = false;
         }
 
@@ -132,11 +133,11 @@ namespace Editor.Model
                 {
                     var lastIndex = track.Count - 1;
                     if (track[lastIndex].Frame > lastFrame)
-                        lastFrame = track[lastIndex].Frame;    
+                        lastFrame = track[lastIndex].Frame;
                 }
             }
 
-            return lastFrame == int.MinValue ? 0 : lastFrame; 
+            return lastFrame == int.MinValue ? 0 : lastFrame;
         }
 
         public int GetPreviousFrame(int? frame = null)
@@ -145,15 +146,15 @@ namespace Editor.Model
             var previousFrame = GetFirstFrame();
             foreach (var track in _tracks.Values)
             {
-                if(!track.HasKeyframes())
+                if (!track.HasKeyframes())
                     continue;
-                
+
                 var index = track.GetBestIndex(f) - 1;
                 if (index < 0)
                     index = 0;
                 else if (index >= track.Count)
                     index = track.Count - 1;
-                
+
                 var kf = track[index];
 
                 if (kf.Frame > previousFrame)
@@ -162,30 +163,30 @@ namespace Editor.Model
 
             return f < previousFrame ? f : previousFrame;
         }
-        
-        public int GetNexFrame(int? frame = null)
+
+        public int GetNextFrame(int? frame = null)
         {
             var f = frame ?? _currentKeyframe;
             var nextFrame = GetLastFrame();
             foreach (var track in _tracks.Values)
             {
-                if(!track.HasKeyframes())
+                if (!track.HasKeyframes())
                     continue;
-                
+
                 var index = track.GetExactIndex(f);
                 if (index < 0)
                     index = ~index;
                 else
                     index++;
-                
+
                 if (index < 0)
                     index = 0;
                 else if (index >= track.Count)
                     index = track.Count - 1;
-                
+
                 var kf = track[index];
-                
-                if(kf.Frame == _currentKeyframe)
+
+                if (kf.Frame == _currentKeyframe)
                     continue;
 
                 if (kf.Frame < nextFrame)
@@ -202,28 +203,166 @@ namespace Editor.Model
 
             _frameTimer += deltaTime;
 
-            if (!(_frameTimer >= _frameTime))
-                return;
-
-            _frameTimer -= _frameTime;
-
             var lastFrame = GetLastFrame();
             var firstFrame = GetFirstFrame();
 
-            if (_isPlayingBackward)
-                CurrentKeyframe--;
-            else if (_isPlayingForward)
-                CurrentKeyframe++;
-
-            if (_isLooping && HasKeyframes())
+            while (_frameTimer >= _frameTime)
             {
-                if (CurrentKeyframe > lastFrame)
-                    CurrentKeyframe = firstFrame;
-                else if (CurrentKeyframe < firstFrame)
-                    CurrentKeyframe = lastFrame;
+                _frameTimer -= _frameTime;
+
+                if (_isPlayingBackward)
+                    CurrentKeyframe--;
+                else if (_isPlayingForward)
+                    CurrentKeyframe++;
+
+                if (_isLooping && HasKeyframes())
+                {
+                    if (CurrentKeyframe > lastFrame)
+                        CurrentKeyframe = firstFrame;
+                    else if (CurrentKeyframe < firstFrame)
+                        CurrentKeyframe = lastFrame;
+
+                }
             }
         }
+        public void UpdateTimelineInputs()
+        {
+            if (ImGui.IsKeyPressed(ImGuiKey.Enter))
+            {
+                PlayForward();
+            }
+            if (ImGui.IsKeyPressed(ImGuiKey.L))
+            {
+                ToggleLooping();
+            }
+            var lastFrame = GetLastFrame();
+            var firstFrame = GetFirstFrame();
 
+            if (ImGui.IsKeyPressed(ImGuiKey.LeftArrow))
+            {
+                CurrentKeyframe--;
+                if (_isLooping && HasKeyframes() && CurrentKeyframe < firstFrame)
+                    CurrentKeyframe = lastFrame;
+            }
+            if (ImGui.IsKeyPressed(ImGuiKey.RightArrow))
+            {
+                CurrentKeyframe++;
+                if (_isLooping && HasKeyframes() && CurrentKeyframe > lastFrame)
+                    CurrentKeyframe = firstFrame;
+            }
+            if (ImGui.IsKeyPressed(ImGuiKey.Home))
+            {
+                CurrentKeyframe = GetFirstFrame();
+                if (CurrentKeyframe <= ImGuiEx.visibleStartingFrame)
+                    ImGuiEx.visibleStartingFrame = CurrentKeyframe;
+                else if (CurrentKeyframe >= ImGuiEx.visibleEndingFrame)
+                    ImGuiEx.visibleStartingFrame += (CurrentKeyframe - ImGuiEx.visibleEndingFrame) + 1;
+            }
+            if (ImGui.IsKeyPressed(ImGuiKey.End))
+            {
+                CurrentKeyframe = GetLastFrame();
+                if (CurrentKeyframe <= ImGuiEx.visibleStartingFrame)
+                    ImGuiEx.visibleStartingFrame = CurrentKeyframe;
+                else if (CurrentKeyframe >= ImGuiEx.visibleEndingFrame)
+                    ImGuiEx.visibleStartingFrame += (CurrentKeyframe - ImGuiEx.visibleEndingFrame) + 1;
+
+            }
+        }
+        /*public bool Interpolate(int trackId, out object value)
+        {
+            value = null;
+            if (!_tracks.ContainsKey(trackId))
+                return false;
+
+            var track = _tracks[trackId];
+            if (track.Count <= 0)
+                return false;
+
+            var interpolator = _interpolators[track.Type];
+            var keyFrameIndex = track.GetExactIndex(_currentKeyframe);
+            Keyframe firstKf, secondKf;
+            // in between 2 frames
+            if (keyFrameIndex >= 0)
+            {
+                if (keyFrameIndex == track.Count - 1 || keyFrameIndex == 0 && track.Count == 1)
+                {
+                    value = track[keyFrameIndex].Value;
+                    return true;
+                }
+                else
+                {
+                    firstKf = track[keyFrameIndex];
+                    secondKf = track[keyFrameIndex + 1];
+                }
+            }
+            else // before or after frames
+            {
+                var newIndex = ~keyFrameIndex;
+                if (newIndex == track.Count)
+                {
+                    value = track[newIndex - 1].Value;
+                    return true;
+                }
+                else if (newIndex == 0)
+                {
+                    value = track[newIndex].Value;
+                    return true;
+                }
+                else
+                {
+                    firstKf = track[newIndex - 1];
+                    secondKf = track[newIndex];
+                }
+            }
+            var progress = (_currentKeyframe - firstKf.Frame) / (float)(secondKf.Frame - firstKf.Frame);
+            float lerpValue = progress;
+            switch (firstKf.InterpolationType)
+            {
+                case InterpolationType.Squared:
+                    lerpValue *= lerpValue;
+                    break;
+                case InterpolationType.InverseSquared:
+                    lerpValue = 1 - (1 - progress) * (1 - progress);
+                    break;
+                case InterpolationType.SmoothStep:
+                    // lerpValue = MathHelper.Lerp(progress * progress, 1 - (1 - progress) * (1 - progress), progress);
+                    lerpValue = Easing.Quadratic.InOut(progress);
+                    break;
+                case InterpolationType.Cubed:
+                    lerpValue *= lerpValue * lerpValue;
+                    break;
+                case InterpolationType.InverseCubed:
+                    lerpValue = 1 - (1 - progress) * (1 - progress) * (1 - progress);
+                    break;
+                case InterpolationType.CubedSmoothStep:
+                    // lerpValue = MathHelper.Lerp(progress * progress * progress, 1 - (1 - progress) * (1 - progress) * (1 - progress), progress);
+                    lerpValue = Easing.Cubic.InOut(progress);
+                    break;
+                case InterpolationType.ElasticOut:
+                    lerpValue = Easing.Elastic.Out(progress)
+                    //  1 + MathF.Sin(6.2831f - 13f * (1 + progress) * MathHelper.PiOver2) * MathF.Pow(2, -6f * progress);
+                    break;
+                case InterpolationType.ElasticInOut:
+                    lerpValue = Easing.Elastic.InOut(progress);
+                    break;
+                case InterpolationType.ElasticIn:
+                    lerpValue = Easing.Elastic.In(progress);
+                    break;
+                case InterpolationType.BounceIn:
+                    lerpValue = Easing.Bounce.In(progress);
+                    break;
+                case InterpolationType.BounceOut:
+                    lerpValue = Easing.Bounce.Out(progress);
+                    break;
+                case InterpolationType.BounceInOut:
+                    lerpValue = Easing.Bounce.InOut(progress);
+                    break;
+            }
+            // $"{progress} -> {lerpValue}".Log();
+            value = interpolator.Interpolate(lerpValue, firstKf.Value, secondKf.Value);
+
+            return true;
+        }*/
         public bool Interpolate(int trackId, out object value)
         {
             value = null;
@@ -236,37 +375,79 @@ namespace Editor.Model
 
             var interpolator = _interpolators[track.Type];
             var keyFrameIndex = track.GetExactIndex(_currentKeyframe);
-
-            // in between 2 frames
+            KeyframeLink link;
             if (keyFrameIndex >= 0)
             {
-                if (keyFrameIndex == track.Count - 1 || keyFrameIndex == 0 && track.Count == 1)
-                    value = track[keyFrameIndex].Value;
-                else
-                {
-                    var firstKf = track[keyFrameIndex];
-                    var secondKf = track[keyFrameIndex + 1];
-                    var fraction = (_currentKeyframe - firstKf.Frame) / (float) (secondKf.Frame - firstKf.Frame);
-
-                    value = interpolator.Interpolate(1 - fraction, firstKf.Value, secondKf.Value);
-                }
+                link = track[keyFrameIndex].ContainingLink;
             }
-            else // before or after frames
+            else // son las 2 de la mañana no voy a implementar frames negativos
             {
+                return false;
                 var newIndex = ~keyFrameIndex;
                 if (newIndex == track.Count)
+                {
                     value = track[newIndex - 1].Value;
+                    return true;
+                }
                 else if (newIndex == 0)
+                {
                     value = track[newIndex].Value;
+                    return true;
+                }
                 else
                 {
-                    var firstKf = track[newIndex - 1];
-                    var secondKf = track[newIndex];
-                    var fraction = (_currentKeyframe - firstKf.Frame) / (float) (secondKf.Frame - firstKf.Frame);
-
-                    value = interpolator.Interpolate(1 - fraction, firstKf.Value, secondKf.Value);
+                    link = track[newIndex - 1].ContainingLink;
                 }
             }
+            var progress = (_currentKeyframe - link.FirstKeyframe.Frame) / (float)(link.LastKeyframe.Frame - link.FirstKeyframe.Frame);
+            float lerpValue = progress;
+            switch (InterpolationType.Lineal)
+            {
+                case InterpolationType.Squared:
+                    lerpValue *= lerpValue;
+                    break;
+                case InterpolationType.InverseSquared:
+                    lerpValue = 1 - (1 - progress) * (1 - progress);
+                    break;
+                case InterpolationType.SmoothStep:
+                    // lerpValue = MathHelper.Lerp(progress * progress, 1 - (1 - progress) * (1 - progress), progress);
+                    lerpValue = Easing.Quadratic.InOut(progress);
+                    break;
+                case InterpolationType.Cubed:
+                    lerpValue *= lerpValue * lerpValue;
+                    break;
+                case InterpolationType.InverseCubed:
+                    lerpValue = 1 - (1 - progress) * (1 - progress) * (1 - progress);
+                    break;
+                case InterpolationType.CubedSmoothStep:
+                    // lerpValue = MathHelper.Lerp(progress * progress * progress, 1 - (1 - progress) * (1 - progress) * (1 - progress), progress);
+                    lerpValue = Easing.Cubic.InOut(progress);
+                    break;
+                case InterpolationType.ElasticOut:
+                    lerpValue = Easing.Elastic.Out(progress)/*  1 + MathF.Sin(6.2831f - 13f * (1 + progress) * MathHelper.PiOver2) * MathF.Pow(2, -6f * progress) */;
+                    break;
+                case InterpolationType.ElasticInOut:
+                    lerpValue = Easing.Elastic.InOut(progress);
+                    break;
+                case InterpolationType.ElasticIn:
+                    lerpValue = Easing.Elastic.In(progress);
+                    break;
+                case InterpolationType.BounceIn:
+                    lerpValue = Easing.Bounce.In(progress);
+                    break;
+                case InterpolationType.BounceOut:
+                    lerpValue = Easing.Bounce.Out(progress);
+                    break;
+                case InterpolationType.BounceInOut:
+                    lerpValue = Easing.Bounce.InOut(progress);
+                    break;
+            }
+            // $"{progress} -> {lerpValue}".Log();
+            int i = (int)(link.Keyframes.Length * progress);
+            if (i >= link.Keyframes.Length)
+                value = link.LastKeyframe.Value;
+            else
+                value = interpolator.Interpolate(lerpValue, link.Keyframes[i], link.Keyframes[i + 1]);
 
             return true;
         }
@@ -277,7 +458,7 @@ namespace Editor.Model
             _tracks[trackId] = track;
 
             if (!_groups.ContainsKey(groupName))
-                _groups[groupName] = new HashSet<int> {trackId};
+                _groups[groupName] = new HashSet<int> { trackId };
             else
                 _groups[groupName].Add(trackId);
         }
@@ -292,7 +473,7 @@ namespace Editor.Model
                 _tracks[trackId] = new AnimationTrack(type, trackName);
 
             if (!_groups.ContainsKey(groupName))
-                _groups[groupName] = new HashSet<int> {trackId};
+                _groups[groupName] = new HashSet<int> { trackId };
             else
                 _groups[groupName].Add(trackId);
 
@@ -309,6 +490,16 @@ namespace Editor.Model
                 track[index].Value = value;
             else
                 track.Insert(index, new Keyframe(kf, value));
+        }
+
+        public void RemoveKeyframe(int trackId, int? keyframe = null)
+        {
+            var kf = keyframe ?? _currentKeyframe;
+            var track = _tracks[trackId];
+
+            var index = track.GetBestIndex(kf);
+            if (track.HasKeyframeAtFrame(kf))
+                track.RemoveAt(index);
         }
 
         public bool HasKeyframes()
@@ -343,7 +534,7 @@ namespace Editor.Model
             var hasGroup = _groups.ContainsKey(groupName);
             if (!hasGroup)
                 return false;
-            
+
             foreach (var trackId in _groups[groupName])
             {
                 var track = _tracks[trackId];
@@ -381,7 +572,7 @@ namespace Editor.Model
                 var trackIds = _groups[groupName];
                 trackIds.Remove(oldId);
                 trackIds.Add(newId);
-                
+
                 var track = _tracks[oldId];
                 track.Id = trackName;
                 _tracks.Remove(oldId);

@@ -7,16 +7,16 @@ namespace Editor.Model.Converters
 {
     public class EntityConverter : JsonConverter<Entity>
     {
-        private readonly Dictionary<string, Property> _propertyDefinitions;
+        private readonly IDictionary<string, Property> _propertyDefinitions;
 
-        public EntityConverter(Dictionary<string, Property> propertyDefinitions)
+        public EntityConverter(IDictionary<string, Property> propertyDefinitions)
         {
             _propertyDefinitions = propertyDefinitions;
         }
 
         public override Entity Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
-            var entity = new Entity(String.Empty, String.Empty);
+            var entity = new Entity(string.Empty, string.Empty);
 
             if (reader.TokenType != JsonTokenType.StartObject)
                 throw new JsonException();
@@ -40,7 +40,7 @@ namespace Editor.Model.Converters
                 {
                     if (reader.TokenType == JsonTokenType.EndArray)
                         break;
-                    
+
                     var property = reader.GetString();
                     var propertyDefinition = _propertyDefinitions[property];
                     entity.SetCurrentPropertyValue(propertyDefinition, propertyDefinition.CreateInstance());

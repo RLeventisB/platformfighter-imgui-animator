@@ -7,22 +7,20 @@ namespace Editor.Model
     public class AnimationTrack : IReadOnlyList<Keyframe>
     {
         public Type Type { get; }
-        
         public string Id { get; set; }
-        
         public int Count => _keyframes.Count;
 
         public Keyframe this[int index] => _keyframes[index];
-        
         private readonly List<Keyframe> _keyframes;
-        
+        private readonly List<KeyframeLink> _links;
         public AnimationTrack(Type type, string id)
         {
             Type = type;
             Id = id;
-            _keyframes = new List<Keyframe>(1024);
+            _keyframes = new List<Keyframe>();
+            _links = new List<KeyframeLink>();
         }
-        
+
         public IEnumerator<Keyframe> GetEnumerator()
         {
             return _keyframes.GetEnumerator();
@@ -37,12 +35,33 @@ namespace Editor.Model
         {
             _keyframes.Add(value);
         }
+        public void AddLink(KeyframeLink link)
+        {
+            foreach (var keyframe in link)
+            {
+                keyframe.ContainingLink = link;
+            }
+
+            _links.Add(link);
+        }
+        public void RemoveLink(KeyframeLink link)
+        {
+            foreach (var keyframe in link)
+            {
+                keyframe.ContainingLink = null;
+            }
+            _links.Remove(link);
+        }
+        public IEnumerator<KeyframeLink> EnumerateLinks()
+        {
+            return _links.GetEnumerator();
+        }
 
         public void Insert(int index, Keyframe value)
         {
             _keyframes.Insert(index, value);
         }
-        
+
         public void RemoveAt(int index)
         {
             _keyframes.RemoveAt(index);
@@ -52,7 +71,7 @@ namespace Editor.Model
         {
             return _keyframes.GetRange(start, count);
         }
-        
+
         public bool HasKeyframes()
         {
             return _keyframes.Count > 0;
@@ -67,7 +86,7 @@ namespace Editor.Model
         {
             return _keyframes.BinarySearch(value);
         }
-        
+
         public int GetBestIndex(Keyframe value)
         {
             var foundIndex = GetExactIndex(value);
