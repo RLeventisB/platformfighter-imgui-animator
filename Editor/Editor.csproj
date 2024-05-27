@@ -11,17 +11,16 @@
   <ItemGroup>
     <PackageReference Include="ImGui.NET" Version="1.90.1.1" />
     <PackageReference Include="MonoGame.Framework.DesktopGL" Version="3.8.1.303" />
-    <!-- <MonoGameContentReference Include="Content\Content.mgcb" /> -->
     <PackageReference Include="MonoGame.Content.Builder.Task" Version="3.8.1.303" />
     <MonoGameContentReference Include="**\*.mgcb" />
     <Compile Remove="Model/Converters/*.*" />
   </ItemGroup>
 
-  <Target Name="CopyAssets" AfterTargets="Build">
+  <!-- <Target Name="CopyAssets" AfterTargets="Build">
     <ItemGroup>
       <Data Include="../Raw/**/*" />
     </ItemGroup>
     <Copy SourceFiles="@(Data)" DestinationFolder="$(TargetDir)/%(RecursiveDir)" />
-  </Target>
+  </Target> -->
 
 </Project>

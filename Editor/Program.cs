@@ -8,7 +8,7 @@ namespace game
         [STAThread]
         static void Main()
         {
-            using (var game = new GameApplication())
+            using (var game = new EditorApplication())
                 game.Run();
         }
     }

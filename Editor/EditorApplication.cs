@@ -7,9 +7,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Runtime.InteropServices;
-using System.Threading;
-using System.Threading.Tasks;
 using Editor.Geometry;
 using Editor.Graphics;
 using Editor.Graphics.Grid;
@@ -31,20 +28,21 @@ namespace Editor
             get => frozenPropDef;
             set => frozenPropDef = value.ToFrozenDictionary();
         }
-        public Dictionary<string, TextureFrame> Textures { get; set; } = new Dictionary<string, TextureFrame>(64);
-        public Dictionary<string, Entity> Entities { get; set; } = new Dictionary<string, Entity>(64);
+        public Dictionary<string, TextureFrame> Textures { get; set; } = new Dictionary<string, TextureFrame>();
+        public Dictionary<string, Entity> Entities { get; set; } = new Dictionary<string, Entity>();
         public Animator Animator { get; set; } = new Animator();
     }
 
-    public class GameApplication : Game
+    public class EditorApplication : Game
     {
+        private static DragAction currentDragAction;
         private SpriteBatch _spriteBatch;
         private PrimitiveBatch _primitiveBatch;
 
         public static State State;
 
         private DynamicGrid _grid;
-        private Camera camera;
+        public Camera camera;
         private ImGuiRenderer _imguiRenderer;
         private MouseState previousMouseState;
         private bool nextFrameSave;
@@ -56,7 +54,7 @@ namespace Editor
         public string selectedEntityId = string.Empty;
         public string selectedTextureId = string.Empty;
         public string hoveredentityId = string.Empty;
-        public static GameApplication Instance;
+        public static EditorApplication Instance;
         private Vector2 previousMouseWorld, mouseWorld, mouseWorldDelta;
         private bool isRotating;
         /// <summary>
@@ -73,7 +71,7 @@ namespace Editor
         public const string ROTATION_PROPERTY = "Rotation";
         public const string FRAMEINDEX_PROPERTY = "FrameIndex";
 
-        public GameApplication()
+        public EditorApplication()
         {
             new GraphicsDeviceManager(this)
             {
@@ -132,9 +130,15 @@ namespace Editor
 
         private void InitializeDefaultState(State state, bool addDefaultProperties = true)
         {
-            state.Animator.AddInterpolator<Vector2>((fraction, first, second) => first + (second - first) * fraction);
-            state.Animator.AddInterpolator<int>((fraction, first, second) => (int)(first + (second - first) * fraction));
-            state.Animator.AddInterpolator<float>((fraction, first, second) => first + (second - first) * fraction);
+            state.Animator.AddInterpolator<Vector2>(
+                (fraction, first, second) => first + (second - first) * fraction,
+                (fraction, values) => ImGuiEx.CubicHermiteInterpolate(values, fraction));
+            state.Animator.AddInterpolator<int>(
+                (fraction, first, second) => (int)(first + (second - first) * fraction),
+                (fraction, values) => (int)ImGuiEx.CubicHermiteInterpolate(values.Select(v => (float)v).ToArray(), fraction));
+            state.Animator.AddInterpolator<float>(
+                (fraction, first, second) => first + (second - first) * fraction,
+                (fraction, values) => ImGuiEx.CubicHermiteInterpolate(values, fraction));
             state.Animator.OnKeyframeChanged += () =>
             {
                 foreach (var entity in State.Entities.Values)
@@ -176,7 +180,7 @@ namespace Editor
                 float b = color.Z;
                 color.Z = r * (1 + b - r);
                 color.X = b;
-                color.Y /= (1 + b - r);
+                color.Y /= 1 + b - r;
             }
 
             _spriteBatch = new SpriteBatch(GraphicsDevice);
@@ -323,6 +327,7 @@ namespace Editor
         private unsafe void DrawUi(GameTime gameTime)
         {
             _imguiRenderer.BeforeLayout(gameTime);
+            var drawList = ImGui.GetBackgroundDrawList();
 
             // Draw viewport overlays
             if (!string.IsNullOrEmpty(hoveredentityId))
@@ -354,9 +359,22 @@ namespace Editor
                 NVector2 uv1 = new NVector2(glyphDataPtr[8], glyphDataPtr[7]);
                 NVector2 uv2 = new NVector2(glyphDataPtr[8], glyphDataPtr[9]);
                 NVector2 uv3 = new NVector2(glyphDataPtr[6], glyphDataPtr[9]);
-                ImGui.GetBackgroundDrawList().AddImageQuad(_imguiRenderer.fontTextureId.Value, tl, tr, br, bl, uv0, uv1, uv2, uv3, Color.White.PackedValue);
+                drawList.AddImageQuad(_imguiRenderer.fontTextureId.Value, tl, tr, br, bl, uv0, uv1, uv2, uv3, Color.White.PackedValue);
             }
-
+            if (ImGuiEx.selectedLink != null)
+            {
+                switch (ImGuiEx.selectedLink.track.PropertyId)
+                {
+                    case POSITION_PROPERTY:
+                        foreach (var keyframe in ImGuiEx.selectedLink.Keyframes)
+                        {
+                            Vector2 position = camera.WorldToScreen((Vector2)keyframe.Value);
+                            bool hover = ImGuiEx.IsInsideRectangle(position, new Vector2(10), MathHelper.PiOver4, ImGui.GetMousePos());
+                            drawList.AddNgon(new NVector2(position.X, position.Y), 10, hover ? 0xBBBBBBBB : 0x66666666, 4);
+                        }
+                        break;
+                }
+            }
             const int hierarchyWindowWidth = 300;
 
             ImGui.SetNextWindowPos(new NVector2(0, GraphicsDevice.Viewport.Height - 250), ImGuiCond.Always);
@@ -386,22 +404,6 @@ namespace Editor
                 ImGui.SetNextFrameWantCaptureMouse(true);
             }
         }
-
-        /*private JsonSerializerOptions CreateJsonSerializerOptions(IDictionary<string, Property> propertyDefs = null)
-        {
-            var options = new JsonSerializerOptions() { WriteIndented = true };
-            options.Converters.Add(new Vector2Convertor());
-            options.Converters.Add(new NVector2Convertor());
-            if (propertyDefs != null)
-            {
-                options.Converters.Add(new TrackConverter(propertyDefs));
-                options.Converters.Add(new EntityConverter(propertyDefs));
-            }
-            options.Converters.Add(new AnimatorConverter());
-            options.Converters.Add(new PropertyConverter());
-            options.Converters.Add(new TextureFrameConverter(GraphicsDevice));
-            return options;
-        }*/
 
         private void DrawUiActions()
         {
@@ -470,15 +472,13 @@ namespace Editor
                     {
                         _openFdDefinition.SelectedRelativePath += ".anim";
                     }
-                    // var json = JsonSerializer.Serialize(State, CreateJsonSerializerOptions(State.PropertyDefinitions));
-                    // File.WriteAllText(_openFdDefinition.SelectedRelativePath, json);
 
                     using (FileStream stream = File.Open(_openFdDefinition.SelectedRelativePath, FileMode.OpenOrCreate))
                     {
                         using (BinaryWriter writer = new BinaryWriter(stream))
                         {
                             writer.Write(1296649793);
-                            writer.Write((byte)0);
+                            writer.Write((byte)1);
                             writer.Write(State.Animator.FPS);
                             writer.Write(State.PropertyDefinitions.Count);
                             foreach (var propDefinition in State.PropertyDefinitions)
@@ -503,10 +503,10 @@ namespace Editor
 
                                 writer.Write(entityId);
                                 writer.Write(entity.TextureId);
-                                Dictionary<string, AnimationTrack> tracks = new Dictionary<string, AnimationTrack>(State.Animator.EnumerateGroupTrackIds(entityId).Select(v =>
+                                Dictionary<string, AnimationTrack> tracks = new Dictionary<string, AnimationTrack>(State.Animator.EnumerateEntityTrackIds(entityId).Select(v =>
                                 {
                                     AnimationTrack track = State.Animator.GetTrack(v);
-                                    return new KeyValuePair<string, AnimationTrack>(track.Id, track);
+                                    return new KeyValuePair<string, AnimationTrack>(track.PropertyId, track);
                                 }));
 
                                 writer.Write(entity.Properties.Count);
@@ -519,7 +519,6 @@ namespace Editor
                                     foreach (var keyframe in animationTrack)
                                     {
                                         writer.Write(keyframe.Frame);
-                                        writer.Write((byte)keyframe.InterpolationType);
                                         switch (keyframe.Value)
                                         {
                                             case Vector2 vector2:
@@ -532,6 +531,10 @@ namespace Editor
                                                 writer.Write(int32);
                                                 break;
                                         }
+                                    }
+                                    foreach (var link in animationTrack.links)
+                                    {
+
                                     }
                                 }
                             }
@@ -548,22 +551,6 @@ namespace Editor
                 }
                 DoPopup("Open project", ref _openFdDefinition, () =>
                 {
-                    // load json
-                    // var json = File.ReadAllText(_openFdDefinition.SelectedRelativePath);
-
-                    // using var jsonDocument = JsonDocument.Parse(json);
-                    // if (jsonDocument.RootElement.TryGetProperty(nameof(State.PropertyDefinitions), out JsonElement value))
-                    // {
-                    //     var propJson = value.ToString();
-                    //     var properties = JsonSerializer.Deserialize<Dictionary<string, Property>>(propJson, CreateJsonSerializerOptions());
-                    //     var newState = JsonSerializer.Deserialize<State>(json, CreateJsonSerializerOptions(properties));
-
-                    //     // clean animator and sprites/textures
-                    //     ResetEditor(newState, false);
-                    //     State = newState;
-                    //     State.Animator.OnKeyframeChanged?.Invoke();
-
-                    // }
                     using (FileStream stream = File.OpenRead(_openFdDefinition.SelectedRelativePath))
                     {
                         using (BinaryReader reader = new BinaryReader(stream))
@@ -600,10 +587,10 @@ namespace Editor
                                         State.Entities.EnsureCapacity(count);
                                         for (int i = 0; i < count; i++)
                                         {
-                                            string key = reader.ReadString();
+                                            string entityId = reader.ReadString();
 
-                                            Entity entity = new Entity(key, reader.ReadString());
-                                            State.Entities.Add(key, entity);
+                                            Entity entity = new Entity(entityId, reader.ReadString());
+                                            State.Entities.Add(entityId, entity);
 
                                             int entityPropertyCount = reader.ReadInt32();
                                             for (int j = 0; j < entityPropertyCount; j++)
@@ -614,11 +601,11 @@ namespace Editor
 
                                                 int keyframeCount = reader.ReadInt32();
                                                 Type type = property.Type;
-                                                AnimationTrack track = new AnimationTrack(type, propertyName);
+                                                AnimationTrack track = new AnimationTrack(type, propertyName, entityId);
                                                 for (int h = 0; h < keyframeCount; h++)
                                                 {
                                                     int frame = reader.ReadInt32();
-                                                    InterpolationType interpolationType = (InterpolationType)reader.ReadByte();
+                                                    reader.ReadByte();
                                                     object data = null;
                                                     switch (type.FullName)
                                                     {
@@ -636,14 +623,11 @@ namespace Editor
                                                     }
                                                     if (data is not null)
                                                     {
-                                                        Keyframe keyframe = new Keyframe(frame, data)
-                                                        {
-                                                            InterpolationType = interpolationType
-                                                        };
+                                                        Keyframe keyframe = new Keyframe(frame, data);
                                                         track.Add(keyframe);
                                                     }
                                                 }
-                                                State.Animator.AddTrack(key, track);
+                                                State.Animator.AddTrack(entityId, track);
                                             }
                                         }
                                         break;
@@ -663,8 +647,8 @@ namespace Editor
                 ImGui.SetNextWindowContentSize(NVector2.One * 600);
                 if (ImGui.BeginPopupModal("Settings", ref popupOpen, ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoTitleBar))
                 {
-                    Checkbox("Mostrar posiciones adyacentes", 0);
-                    Checkbox("Mostrar rotaciones adyacentes", 1);
+                    Checkbox("Mostrar posiciones enlazadas", 0);
+                    Checkbox("Mostrar rotaciones enlazadas", 1);
                     Checkbox("Confirmar nuevo proyecto", 2);
                     Checkbox("Mostrar frame nuevo al mover keyframes", 3);
                     Checkbox("Reproducir al seleccionar keyframe", 4);
@@ -1002,7 +986,7 @@ namespace Editor
 
                     ImGui.NextColumn();
                 }
-                if (State.Animator.GroupHasKeyframeAtFrame(selectedEntityId, State.Animator.CurrentKeyframe))
+                if (State.Animator.EntityHasKeyframeAtFrame(selectedEntityId, State.Animator.CurrentKeyframe)) //TODO: select interpolation type in menu
                 {
                     // ImGui.ListBox("")
                 }
@@ -1060,7 +1044,7 @@ namespace Editor
             State.Entities[newName] = entity;
             entity.Id = newName;
 
-            if (State.Animator.ChangeGroupName(oldName, newName))
+            if (State.Animator.ChangeEntityName(oldName, newName))
             {
                 foreach (var property in entity)
                 {
@@ -1088,6 +1072,45 @@ namespace Editor
                     onDone?.Invoke();
 
                 ImGui.EndPopup();
+            }
+        }
+        public static void SetDragAction(DragAction action)
+        {
+            currentDragAction = action;
+        }
+    }
+    public struct DragAction
+    {
+        public readonly Action OnRelease;
+        public readonly Action<Vector2> OnMove;
+        public readonly float DistanceForMove;
+        public bool CallOnMove;
+        public Vector2 ClickPosition, OldPos;
+        public DragAction(Action onRelease, Action<Vector2> onMove, float distanceForMove = 0)
+        {
+            OnRelease = onRelease;
+            OnMove = onMove;
+            distanceForMove = MathF.Abs(distanceForMove);
+            DistanceForMove = distanceForMove * distanceForMove;
+            CallOnMove = distanceForMove == 0;
+        }
+        public void Update()
+        {
+            if (CallOnMove)
+            {
+                Vector2 diff = ImGui.GetCursorPos() - OldPos;
+                if (diff.X != 0 && diff.Y != 0)
+                    OnMove?.Invoke(diff);
+                OldPos = ImGui.GetCursorPos();
+            }
+            else if (Vector2.DistanceSquared(ImGui.GetCursorPos(), ClickPosition) < DistanceForMove)
+            {
+                OnMove?.Invoke(ImGui.GetCursorPos() - ClickPosition);
+                CallOnMove = true;
+            }
+            if (ImGui.IsMouseReleased(ImGuiMouseButton.Left))
+            {
+                OnRelease?.Invoke();
             }
         }
     }

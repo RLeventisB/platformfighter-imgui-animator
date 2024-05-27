@@ -6,7 +6,7 @@ namespace Editor.Graphics
 {
     public class Camera
     {
-        public static Viewport viewport => GameApplication.Instance.GraphicsDevice.Viewport;
+        public static Viewport viewport => EditorApplication.Instance.GraphicsDevice.Viewport;
         private Quaternion _orientation = Quaternion.Identity;
         private Vector3 _translation = Vector3.Zero;
         private bool _isDirty;

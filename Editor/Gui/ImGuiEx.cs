@@ -8,6 +8,141 @@ namespace Editor.Gui
 {
     public static partial class ImGuiEx
     {
+
+        public static bool IsInsideRectangle(Vector2 position, Vector2 size, float rotation, Vector2 point)
+        {
+            // Translate point to local coordinates of the rectangle
+            double localX = point.X - position.X;
+            double localY = point.Y - position.Y;
+
+            // Rotate point around the rectangle center by the negative of the rectangle angle
+            double cosAngle = Math.Cos(-rotation);
+            double sinAngle = Math.Sin(-rotation);
+            double rotatedX = localX * cosAngle - localY * sinAngle;
+            double rotatedY = localX * sinAngle + localY * cosAngle;
+
+            // Check if the rotated point is inside the unrotated rectangle
+            double halfWidth = size.X / 2;
+            double halfHeight = size.Y / 2;
+            return Math.Abs(rotatedX) <= halfWidth && Math.Abs(rotatedY) <= halfHeight;
+        }
+        // https://en.wikibooks.org/wiki/Cg_Programming/Unity/Hermite_Curves and chatgpt IM SORRY but I cant understand this
+        public static float CubicHermiteInterpolate(float[] points, float t)
+        {
+            // Ensure at least two points exist for interpolation
+            if (points.Length < 2)
+                throw new ArgumentException("At least two points are required for interpolation.");
+
+            // Calculate tangent vectors
+            float[] tangents = CalculateTangents(points);
+
+            // Calculate segment index and local t
+            float segment = t * (points.Length - 1);
+            int segmentIndex = (int)segment;
+            float localT = segment - segmentIndex;
+            // Extrapolate if t is outside the range [0, 1]
+            if (t < 0)
+            {
+                segmentIndex = 0;
+                localT = t * (points.Length - 1);
+            }
+            else if (t >= 1)
+            {
+                segmentIndex = points.Length - 2;
+                localT = (t * (points.Length - 1)) - segmentIndex;
+            }
+            // Hermite basis functions
+            float h1 = 2 * localT * localT * localT - 3 * localT * localT + 1;
+            float h2 = -2 * localT * localT * localT + 3 * localT * localT;
+            float h3 = localT * localT * localT - 2 * localT * localT + localT;
+            float h4 = localT * localT * localT - localT * localT;
+
+            // Interpolate using Hermite spline formula
+            float interpolatedPoint = h1 * points[segmentIndex] +
+                                        h2 * points[segmentIndex + 1] +
+                                        h3 * tangents[segmentIndex] +
+                                        h4 * tangents[segmentIndex + 1];
+
+            return interpolatedPoint;
+        }
+
+        public static float[] CalculateTangents(float[] points)
+        {
+            float[] tangents = new float[points.Length];
+
+            // Calculate tangents based on differences between adjacent points
+            for (int i = 0; i < points.Length; i++)
+            {
+                float tangent = 0f;
+                if (i > 0)
+                    tangent += points[i] - points[i - 1];
+                if (i < points.Length - 1)
+                    tangent += points[i + 1] - points[i];
+
+                tangents[i] = tangent;
+            }
+
+            return tangents;
+        }
+        public static Vector2 CubicHermiteInterpolate(Vector2[] points, float t)
+        {
+            // Ensure at least two points exist for interpolation
+            if (points.Length < 2)
+                throw new ArgumentException("At least two points are required for interpolation.");
+
+            // Calculate tangent vectors
+            Vector2[] tangents = CalculateTangents(points);
+
+            // Calculate segment index and local t
+            float segment = t * (points.Length - 1);
+            int segmentIndex = (int)segment;
+            float localT = segment - segmentIndex;
+
+            // Extrapolate if t is outside the range [0, 1]
+            if (t < 0)
+            {
+                segmentIndex = 0;
+                localT = t * (points.Length - 1);
+            }
+            else if (t >= 1)
+            {
+                segmentIndex = points.Length - 2;
+                localT = (t * (points.Length - 1)) - segmentIndex;
+            }
+
+            // Hermite basis functions
+            float h1 = 2 * localT * localT * localT - 3 * localT * localT + 1;
+            float h2 = -2 * localT * localT * localT + 3 * localT * localT;
+            float h3 = localT * localT * localT - 2 * localT * localT + localT;
+            float h4 = localT * localT * localT - localT * localT;
+
+            // Interpolate using Hermite spline formula
+            Vector2 interpolatedPoint = h1 * points[segmentIndex] +
+                                        h2 * points[segmentIndex + 1] +
+                                        h3 * tangents[segmentIndex] +
+                                        h4 * tangents[segmentIndex + 1];
+
+            return interpolatedPoint;
+        }
+
+        public static Vector2[] CalculateTangents(Vector2[] points)
+        {
+            Vector2[] tangents = new Vector2[points.Length];
+
+            // Calculate tangents based on differences between adjacent points
+            for (int i = 0; i < points.Length; i++)
+            {
+                Vector2 tangent = Vector2.Zero;
+                if (i > 0)
+                    tangent += points[i] - points[i - 1];
+                if (i < points.Length - 1)
+                    tangent += points[i + 1] - points[i];
+
+                tangents[i] = tangent;
+            }
+
+            return tangents;
+        }
         public static T Log<T>(this T obj)
         {
             Console.WriteLine(obj);

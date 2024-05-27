@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using Editor.Gui;
 using Microsoft.Xna.Framework;
 
 namespace Editor.Model
@@ -50,24 +51,11 @@ namespace Editor.Model
 
         public bool IsBeingHovered(Vector2 mouseWorld)
         {
-            Vector2 position = (Vector2)_propertyCurrentValues[GameApplication.POSITION_PROPERTY]; // ok odio este sistema pero supongo que servira para algo
-            float rotation = (float)_propertyCurrentValues[GameApplication.ROTATION_PROPERTY];
-            Vector2 size = GameApplication.State.Textures[TextureId].FrameSize * (Vector2)_propertyCurrentValues[GameApplication.SCALE_PROPERTY];
+            Vector2 position = (Vector2)_propertyCurrentValues[EditorApplication.POSITION_PROPERTY]; // ok odio este sistema pero supongo que servira para algo
+            float rotation = (float)_propertyCurrentValues[EditorApplication.ROTATION_PROPERTY];
+            Vector2 size = EditorApplication.State.Textures[TextureId].FrameSize * (Vector2)_propertyCurrentValues[EditorApplication.SCALE_PROPERTY];
 
-            // Translate point to local coordinates of the rectangle
-            double localX = mouseWorld.X - position.X;
-            double localY = mouseWorld.Y - position.Y;
-
-            // Rotate point around the rectangle center by the negative of the rectangle angle
-            double cosAngle = Math.Cos(-rotation);
-            double sinAngle = Math.Sin(-rotation);
-            double rotatedX = localX * cosAngle - localY * sinAngle;
-            double rotatedY = localX * sinAngle + localY * cosAngle;
-
-            // Check if the rotated point is inside the unrotated rectangle
-            double halfWidth = size.X / 2;
-            double halfHeight = size.Y / 2;
-            return Math.Abs(rotatedX) <= halfWidth && Math.Abs(rotatedY) <= halfHeight;
+            return ImGuiEx.IsInsideRectangle(position, size, rotation, mouseWorld);
         }
     }
 }

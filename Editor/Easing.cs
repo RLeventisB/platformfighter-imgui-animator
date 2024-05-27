@@ -219,15 +219,15 @@ public class Easing
 			}
 			else if (k < (2f / 2.75f))
 			{
-				return 7.5625f * (k -= (1.5f / 2.75f)) * k + 0.75f;
+				return 7.5625f * (k -= 1.5f / 2.75f) * k + 0.75f;
 			}
 			else if (k < (2.5f / 2.75f))
 			{
-				return 7.5625f * (k -= (2.25f / 2.75f)) * k + 0.9375f;
+				return 7.5625f * (k -= 2.25f / 2.75f) * k + 0.9375f;
 			}
 			else
 			{
-				return 7.5625f * (k -= (2.625f / 2.75f)) * k + 0.984375f;
+				return 7.5625f * (k -= 2.625f / 2.75f) * k + 0.984375f;
 			}
 		}
 

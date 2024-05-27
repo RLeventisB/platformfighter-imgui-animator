@@ -38,9 +38,11 @@ namespace Editor.Gui
             ("Last (End)", IcoMoon.LastIcon.ToString()),
             ("Loop (L)", IcoMoon.LoopIcon.ToString())
         };
-        private static (int trackId, int keyframe, float accumulation) interpolationValue = (-1, -1, 0);
-        private static List<Keyframe> keyframesToMove = new List<Keyframe>();
+        private static (int trackId, int linkId, float accumulation) interpolationValue = (-1, -1, 0);
+        public static List<Keyframe> keyframesToMove = new List<Keyframe>();
         private static NVector2 selectKeyframePos;
+        public static KeyframeLink temporaryLink = new KeyframeLink(Array.Empty<Keyframe>()), selectedLink = null;
+        // public static AnimationTrack trackToLink = null;
         private static bool movingKeyframe;
 
         public static void DrawUiTimeline(Animator animator)
@@ -71,12 +73,12 @@ namespace Editor.Gui
             // var zoom = timelineZoomTarget;
             ImGui.DragFloat("##5", ref timelineZoomTarget, 0.1f, 0.1f, 5f);
             timelineZoomTarget = MathHelper.Clamp(timelineZoomTarget, 0.1f, 5f);
-            if (ImGui.IsMouseReleased(ImGuiMouseButton.Left))
+            if (!ImGui.IsMouseDown(ImGuiMouseButton.Left) && movingKeyframe || temporaryLink.Length > 0)
             {
                 keyframesToMove.Clear();
                 movingKeyframe = false;
             }
-            else if (ImGui.IsMouseDown(ImGuiMouseButton.Left) && keyframesToMove.Any() && Vector2.DistanceSquared(ImGui.GetMousePos(), selectKeyframePos) > 16)
+            else if (ImGui.IsMouseDown(ImGuiMouseButton.Left) && keyframesToMove.Count != 0 && Vector2.DistanceSquared(ImGui.GetMousePos(), selectKeyframePos) > 16)
             {
                 movingKeyframe = true;
             }
@@ -92,7 +94,8 @@ namespace Editor.Gui
                 ImGui.SameLine(currentLegendWidth);
 
                 float oldTimelineZoomTarget = timelineZoomTarget; // im lazy
-                DrawTimeline(animator, style.ItemSpacing.Y, ImGui.GetItemRectSize().Y);
+                float headerHeightOrsmting = ImGui.GetItemRectSize().Y;
+                DrawTimeline(animator, style.ItemSpacing.Y, (float)headerHeightOrsmting);
 
                 ImGui.BeginChild("##content", NVector2.Zero);
                 {
@@ -101,30 +104,30 @@ namespace Editor.Gui
 
                     ImGui.Columns(2, "##legend", false);
                     ImGui.SetColumnWidth(0, currentLegendWidth);
-                    foreach (var group in animator)
+                    foreach (var entity in animator)
                     {
-                        if (!animator.GroupHasKeyframes(group))
+                        if (!animator.EntityHasKeyframes(entity))
                             continue;
 
-                        bool open = ImGui.TreeNodeEx(group, ImGuiTreeNodeFlags.DefaultOpen);
+                        bool open = ImGui.TreeNodeEx(entity, ImGuiTreeNodeFlags.DefaultOpen);
 
                         ImGui.NextColumn();
 
-                        // draw group keyframes
+                        // draw entity keyframes
                         for (int i = visibleStartingFrame; i < visibleEndingFrame / timelineZoom; i++)
                         {
-                            if (animator.GroupHasKeyframeAtFrame(group, i))
+                            if (animator.EntityHasKeyframeAtFrame(entity, i))
                             {
                                 DrawKeyFrame(i, Color.LightGray, out NVector2 min, out NVector2 max);
                                 if (ImGui.IsMouseHoveringRect(min, max))
                                 {
                                     ImGui.BeginTooltip();
-                                    ImGui.Text($"Entity: {group}\nFrame: {i}");
+                                    ImGui.Text($"Entity: {entity}\nFrame: {i}");
                                     ImGui.EndTooltip();
 
                                     if (ImGui.IsMouseClicked(ImGuiMouseButton.Left))
                                     {
-                                        foreach (var trackId in animator.EnumerateGroupTrackIds(group))
+                                        foreach (var trackId in animator.EnumerateEntityTrackIds(entity))
                                         {
                                             AnimationTrack track = animator.GetTrack(trackId);
                                             if (track.HasKeyframeAtFrame(i))
@@ -135,15 +138,15 @@ namespace Editor.Gui
 
                                     if (ImGui.IsMouseReleased(ImGuiMouseButton.Left))
                                     {
-                                        GameApplication.State.Animator.CurrentKeyframe = i;
-                                        GameApplication.State.Animator.Stop();
-                                        GameApplication.Instance.selectedEntityId = group;
-                                        GameApplication.Instance.selectedEntityId = group;
+                                        EditorApplication.State.Animator.CurrentKeyframe = i;
+                                        EditorApplication.State.Animator.Stop();
+                                        EditorApplication.Instance.selectedEntityId = entity;
+                                        EditorApplication.Instance.selectedEntityId = entity;
                                     }
 
                                     if (ImGui.IsKeyDown(ImGuiKey.Delete))
                                     {
-                                        foreach (var trackId in animator.EnumerateGroupTrackIds(group))
+                                        foreach (var trackId in animator.EnumerateEntityTrackIds(entity))
                                         {
                                             animator.RemoveKeyframe(trackId, i);
                                         }
@@ -162,6 +165,8 @@ namespace Editor.Gui
                                 foreach (var selectedKeyframe in keyframesToMove)
                                 {
                                     selectedKeyframe.Frame = hoveringFrame;
+                                    selectedKeyframe.ContainingLink?.CalculateBorderKeyframes();
+
                                 }
                                 ImGui.BeginTooltip();
                                 if (keyframesToMove.Count > 1)
@@ -171,91 +176,153 @@ namespace Editor.Gui
                                 ImGui.EndTooltip();
 
                             }
-                            bool hovered = false;
-                            foreach (var trackId in animator.EnumerateGroupTrackIds(group))
+                            bool dontChangeZoom = false;
+                            bool clickedLeft = ImGui.IsMouseClicked(ImGuiMouseButton.Left);
+                            foreach (var trackId in animator.EnumerateEntityTrackIds(entity))
                             {
                                 var track = animator.GetTrack(trackId);
                                 if (!track.HasKeyframes())
                                     continue;
 
-                                ImGui.Text(track.Id);
+                                ImGui.Text(track.PropertyId);
                                 ImGui.NextColumn();
 
-                                var vStartIndex = track.GetBestIndex(visibleStartingFrame);
+                                var vStartIndex = track.GetBestIndex((Keyframe)(visibleStartingFrame / timelineZoom));
                                 var vEndIndex = track.GetBestIndex((Keyframe)((visibleEndingFrame + 1) / timelineZoom));
                                 float mouseWheel = ImGui.GetIO().MouseWheel;
-
-                                foreach (var frame in track.GetRange(vStartIndex, vEndIndex - vStartIndex))
+                                string linkTooltip = string.Empty, keyframeTooltip = string.Empty;
+                                for (int i = 0; i < track.links.Count; i++)
                                 {
-                                    DrawKeyFrame(frame.Frame, Color.ForestGreen, out NVector2 min, out NVector2 max);
+                                    KeyframeLink link = track.links[i];
+
+                                    DrawLink(link, selectedLink == link ? Color.SlateGray.PackedValue : Color.DarkGray.PackedValue, headerHeightOrsmting, out NVector2 min, out NVector2 max);
+
                                     if (!movingKeyframe && ImGui.IsMouseHoveringRect(min, max))
                                     {
-                                        hovered = true;
+                                        dontChangeZoom = true;
+
+                                        if (mouseWheel != 0)
+                                        {
+                                            if (interpolationValue.trackId != trackId && interpolationValue.linkId != i)
+                                            {
+                                                interpolationValue.trackId = trackId;
+                                                interpolationValue.linkId = i;
+                                                interpolationValue.accumulation = 0;
+                                            }
+
+                                            interpolationValue.accumulation += mouseWheel;
+                                            if (interpolationValue.accumulation >= 1)
+                                            {
+                                                link.InterpolationType++;
+                                                if ((byte)link.InterpolationType > Enum.GetValues<InterpolationType>().Length - 1)
+                                                {
+                                                    link.InterpolationType = 0;
+                                                }
+                                            }
+                                            if (interpolationValue.accumulation <= -1)
+                                            {
+                                                link.InterpolationType--;
+                                                if ((byte)link.InterpolationType == byte.MaxValue)
+                                                {
+                                                    link.InterpolationType = Enum.GetValues<InterpolationType>().Last();
+                                                }
+                                            }
+                                        }
+                                        if (ImGui.IsKeyDown(ImGuiKey.Delete))
+                                        {
+                                            track.RemoveLink(link);
+                                        }
+
+                                        if (clickedLeft)
+                                        {
+                                            selectedLink = link;
+                                            unsafe
+                                            {
+                                                ImDrawListPtr drawListPtr = ImGui.GetWindowDrawList();
+                                                ImDrawVert* ptr = drawListPtr._VtxWritePtr.NativePtr;
+                                                ptr -= 4;
+                                                ptr[0].col = Color.SlateGray.PackedValue;
+                                                ptr[1].col = Color.SlateGray.PackedValue;
+                                                ptr[2].col = Color.SlateGray.PackedValue;
+                                                ptr[3].col = Color.SlateGray.PackedValue;
+                                                ptr += 4;
+                                            }
+                                        }
+
+                                        linkTooltip = $"Link {{{string.Join(", ", link.Keyframes.Select(v => v.Frame.ToString()))}}}\n({link.InterpolationType})";
+                                    }
+                                }
+                                foreach (var frame in track.GetRange(vStartIndex, vEndIndex - vStartIndex))
+                                {
+                                    DrawKeyFrame(frame.Frame, temporaryLink.Contains(frame) ? Color.LimeGreen : Color.ForestGreen, out NVector2 min, out NVector2 max);
+
+                                    if (!movingKeyframe && ImGui.IsMouseHoveringRect(min, max))
+                                    {
                                         var index = track.GetBestIndex(frame.Frame);
 
-                                        if (interpolationValue.trackId != trackId && interpolationValue.keyframe != frame.Frame)
-                                        {
-                                            interpolationValue.trackId = trackId;
-                                            interpolationValue.keyframe = frame.Frame;
-                                            interpolationValue.accumulation = 0;
-                                        }
-                                        if (ImGui.IsMouseClicked(ImGuiMouseButton.Left))
+                                        if (clickedLeft)
                                         {
                                             keyframesToMove.Add(frame);
                                             selectKeyframePos = ImGui.GetMousePos();
                                         }
+                                        if ((clickedLeft || ImGui.IsMouseClicked(ImGuiMouseButton.Right)) && ImGui.GetIO().KeyCtrl)
+                                        {
+                                            if (temporaryLink.track != track)
+                                            {
+                                                temporaryLink.Clear();
+                                                temporaryLink.menuY = ImGui.GetCursorPosY();
+                                                temporaryLink.track = track;
+                                            }
+                                            if (temporaryLink.Contains(frame))
+                                            {
+                                                temporaryLink.Remove(frame);
+                                            }
+                                            else
+                                                temporaryLink.Add(frame);
+                                        }
                                         if (ImGui.IsMouseReleased(ImGuiMouseButton.Left))
                                         {
-                                            GameApplication.State.Animator.CurrentKeyframe = frame.Frame;
-                                            GameApplication.State.Animator.Stop();
-                                            GameApplication.Instance.selectedEntityId = group;
-                                            GameApplication.Instance.selectedEntityId = group;
+                                            EditorApplication.State.Animator.CurrentKeyframe = frame.Frame;
+                                            EditorApplication.State.Animator.Stop();
+                                            EditorApplication.Instance.selectedEntityId = entity;
+                                            EditorApplication.Instance.selectedEntityId = entity;
                                         }
                                         if (ImGui.IsKeyDown(ImGuiKey.Delete))
                                         {
                                             track.RemoveAt(index);
                                         }
-                                        if (mouseWheel != 0)
-                                        {
-                                            interpolationValue.accumulation += mouseWheel;
-                                            if (interpolationValue.accumulation >= 1)
-                                            {
-                                                track[index].InterpolationType++;
-                                                if ((byte)track[index].InterpolationType > Enum.GetValues<InterpolationType>().Length - 1)
-                                                {
-                                                    track[index].InterpolationType = 0;
-                                                }
-                                            }
-                                            if (interpolationValue.accumulation <= -1)
-                                            {
-                                                track[index].InterpolationType--;
-                                                if ((byte)track[index].InterpolationType == byte.MaxValue)
-                                                {
-                                                    track[index].InterpolationType = Enum.GetValues<InterpolationType>().Last();
-                                                }
-
-                                            }
-
-                                        }
-                                        ImGui.BeginTooltip();
-                                        if (track.Id == GameApplication.ROTATION_PROPERTY)
-                                            ImGui.Text($"{((float)frame.Value) * 180 / MathHelper.Pi} ({frame.InterpolationType})");
+                                        if (track.PropertyId == EditorApplication.ROTATION_PROPERTY)
+                                            keyframeTooltip = $"{((float)frame.Value) * 180 / MathHelper.Pi}";
                                         else
-                                            ImGui.Text($"{frame.Value} ({frame.InterpolationType})");
-                                        ImGui.EndTooltip();
+                                            keyframeTooltip = $"{frame.Value}";
                                     }
                                 }
+                                bool validLink = !string.IsNullOrEmpty(linkTooltip);
+                                bool validKeyframe = !string.IsNullOrEmpty(keyframeTooltip);
 
+                                if (validLink || validKeyframe)
+                                {
+                                    ImGui.BeginTooltip();
+                                    if (validLink)
+                                    {
+                                        ImGui.Text(linkTooltip);
+                                    }
+                                    if (validKeyframe)
+                                    {
+                                        ImGui.Text(keyframeTooltip);
+                                    }
+                                    ImGui.EndTooltip();
+                                }
                                 ImGui.NextColumn();
                             }
-                            if (hovered)
+                            if (dontChangeZoom)
                             {
                                 timelineZoomTarget = oldTimelineZoomTarget;
                             }
                             else
                             {
                                 interpolationValue.trackId = -1;
-                                interpolationValue.keyframe = -1;
+                                interpolationValue.linkId = -1;
                                 interpolationValue.accumulation = 0;
                             }
                             ImGui.TreePop();
@@ -266,6 +333,12 @@ namespace Editor.Gui
                 }
 
             }
+            if (temporaryLink.Length == 0)
+            {
+                temporaryLink.menuY = float.NaN;
+                temporaryLink.track = null;
+            }
+
             ImGui.EndChild();
         }
 
@@ -285,14 +358,14 @@ namespace Editor.Gui
                     if (animator.CurrentKeyframe <= visibleStartingFrame)
                         visibleStartingFrame = animator.CurrentKeyframe;
                     else if (animator.CurrentKeyframe >= visibleEndingFrame)
-                        visibleStartingFrame += (animator.CurrentKeyframe - visibleEndingFrame) + 1;
+                        visibleStartingFrame += animator.CurrentKeyframe - visibleEndingFrame + 1;
                     break;
                 case "Last (End)":
                     animator.CurrentKeyframe = animator.GetLastFrame();
                     if (animator.CurrentKeyframe <= visibleStartingFrame)
                         visibleStartingFrame = animator.CurrentKeyframe;
                     else if (animator.CurrentKeyframe >= visibleEndingFrame)
-                        visibleStartingFrame += (animator.CurrentKeyframe - visibleEndingFrame) + 1;
+                        visibleStartingFrame += animator.CurrentKeyframe - visibleEndingFrame + 1;
                     break;
 
                 case "Previous":
@@ -383,6 +456,8 @@ namespace Editor.Gui
                 // panning the timeline
                 if (ImGui.IsMouseHoveringRect(timelineRegionMin, timelineRegionMax, false))
                 {
+                    if (ImGui.IsMouseClicked(ImGuiMouseButton.Left))
+                        selectedLink = null;
                     if (ImGui.IsMouseDragging(ImGuiMouseButton.Right, 0))
                     {
                         accumalatedPanningDeltaX += ImGui.GetIO().MouseDelta.X;
@@ -453,6 +528,29 @@ namespace Editor.Gui
                     frameLineStart.Y += radius;
                     drawList.AddCircleFilled(frameLineStart, radius, Color.Pink.PackedValue);
                 }
+                if (temporaryLink.Length != 0)
+                {
+                    ImGuiIOPtr io = ImGui.GetIO();
+
+                    if (io.KeyCtrl && ImGui.IsKeyPressed(ImGuiKey.LeftArrow))
+                    {
+                        int minIndex = temporaryLink.track.GetExactIndex(temporaryLink.LastKeyframe);
+                        if (minIndex > 0)
+                            temporaryLink.Remove(temporaryLink.track[minIndex]);
+                    }
+                    if (io.KeyCtrl && ImGui.IsKeyPressed(ImGuiKey.RightArrow))
+                    {
+                        int maxIndex = temporaryLink.track.GetExactIndex(temporaryLink.LastKeyframe);
+                        if (maxIndex < temporaryLink.track.Count - 1 && maxIndex >= 0)
+                            temporaryLink.Add(temporaryLink.track[maxIndex + 1]);
+                    }
+                    DrawLink(temporaryLink, 0x66666666, headerHeight, out _, out _);
+                    ImGui.BeginTooltip();
+                    ImGui.Text($"Creando enlace desde frame {temporaryLink.FirstKeyframe.Frame} hasta {temporaryLink.LastKeyframe.Frame}\nEn track {temporaryLink.track.EntityId}/{temporaryLink.track.PropertyId}");
+                    if (temporaryLink.Length > 1)
+                        ImGui.Text("Apreta enter para crear!!!");
+                    ImGui.EndTooltip();
+                }
             }
             ImGui.PopClipRect();
 
@@ -485,13 +583,22 @@ namespace Editor.Gui
 
             var size = new NVector2(keyframeSize, keyframeSize + 4);
 
-            min = cursorPos;
-            max = min + size;
-
-            ImGui.GetWindowDrawList().AddRectFilled(cursorPos,
-                cursorPos + size, color.PackedValue);
+            ImGui.GetWindowDrawList().AddRectFilled(min = cursorPos, max = cursorPos + size, color.PackedValue);
         }
+        private static void DrawLink(KeyframeLink link, uint color, float headerHeight, out NVector2 min, out NVector2 max)
+        {
+            int minFrame = link.FirstKeyframe.Frame;
+            int maxFrame = link.LastKeyframe.Frame;
 
+            var position = new NVector2(timelineRegionMin.X, timelineRegionMin.Y + link.menuY + headerHeight + 9);
+
+            float minX = GetTimelinePosForFrame(minFrame), maxX = GetTimelinePosForFrame(maxFrame);
+            position.X += minX;
+
+            var size = new NVector2(maxX - minX, 5f);
+
+            ImGui.GetWindowDrawList().AddRectFilled(min = position, max = position + size, color);
+        }
         private static int GetFrameForTimelinePos(float x)
         {
             return (int)(Math.Floor((x - LineStartOffset / timelineZoom) / pixelsPerFrame + 0.5f) + visibleStartingFrame);

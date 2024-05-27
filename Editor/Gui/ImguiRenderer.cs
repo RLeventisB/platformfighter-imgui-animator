@@ -176,6 +176,15 @@ namespace Editor.Gui
             what(ImGuiKey.Backspace, Keys.Back);
             what(ImGuiKey.Enter, Keys.Enter);
             what(ImGuiKey.Escape, Keys.Escape);
+            what(ImGuiKey.LeftCtrl, Keys.LeftControl);
+            what(ImGuiKey.RightCtrl, Keys.RightControl);
+            what(ImGuiKey.LeftAlt, Keys.LeftAlt);
+            what(ImGuiKey.RightAlt, Keys.RightAlt);
+            // do shift and super
+            what(ImGuiKey.LeftShift, Keys.LeftShift);
+            what(ImGuiKey.RightShift, Keys.RightShift);
+            what(ImGuiKey.LeftSuper, Keys.LeftWindows);
+            what(ImGuiKey.RightSuper, Keys.RightWindows);
             what(ImGuiKey.A, Keys.A);
             what(ImGuiKey.L, Keys.L);
             what(ImGuiKey.C, Keys.C);
@@ -239,12 +248,12 @@ namespace Editor.Gui
         /// <summary>
         /// Sends XNA input state to ImGui
         /// </summary>
-        protected virtual void UpdateInput()
+        protected virtual unsafe void UpdateInput()
         {
-            var io = ImGui.GetIO();
+            ImGuiIOPtr io = new ImGuiIOPtr(ImGuiNative.igGetIO());
             var mouseDown = io.MouseDown;
             var mouse = Mouse.GetState();
-            if (!GameApplication.Instance.IsActive)
+            if (!EditorApplication.Instance.IsActive)
             {
                 io.KeyCtrl = io.KeyAlt = io.KeySuper = io.KeyShift = false;
                 mouseDown[0] = mouseDown[1] = mouseDown[2] = false;
@@ -258,16 +267,19 @@ namespace Editor.Gui
             {
                 io.AddKeyEvent(_keys[i].guiKey, keyboard.IsKeyDown(_keys[i].xnaKey));
             }
+            io.AddKeyEvent(ImGuiKey.ReservedForModCtrl, keyboard.IsKeyDown(Keys.LeftControl) || keyboard.IsKeyDown(Keys.RightControl));
+            io.AddKeyEvent(ImGuiKey.ReservedForModShift, keyboard.IsKeyDown(Keys.LeftShift) || keyboard.IsKeyDown(Keys.RightShift));
+            io.AddKeyEvent(ImGuiKey.ReservedForModAlt, keyboard.IsKeyDown(Keys.LeftAlt) || keyboard.IsKeyDown(Keys.RightAlt));
+            io.AddKeyEvent(ImGuiKey.ReservedForModSuper, keyboard.IsKeyDown(Keys.LeftWindows) || keyboard.IsKeyDown(Keys.RightWindows));
+            // io.KeyShift = keyboard.IsKeyDown(Keys.LeftShift) || keyboard.IsKeyDown(Keys.RightShift);
+            // io.KeyCtrl = keyboard.IsKeyDown(Keys.LeftControl) || keyboard.IsKeyDown(Keys.RightControl);
+            // io.KeyAlt = keyboard.IsKeyDown(Keys.LeftAlt) || keyboard.IsKeyDown(Keys.RightAlt);
+            // io.KeySuper = keyboard.IsKeyDown(Keys.LeftWindows) || keyboard.IsKeyDown(Keys.RightWindows);
 
-            io.KeyShift = keyboard.IsKeyDown(Keys.LeftShift) || keyboard.IsKeyDown(Keys.RightShift);
-            io.KeyCtrl = keyboard.IsKeyDown(Keys.LeftControl) || keyboard.IsKeyDown(Keys.RightControl);
-            io.KeyAlt = keyboard.IsKeyDown(Keys.LeftAlt) || keyboard.IsKeyDown(Keys.RightAlt);
-            io.KeySuper = keyboard.IsKeyDown(Keys.LeftWindows) || keyboard.IsKeyDown(Keys.RightWindows);
+            io.DisplaySize = new NVector2(_graphicsDevice.PresentationParameters.BackBufferWidth, _graphicsDevice.PresentationParameters.BackBufferHeight);
+            io.DisplayFramebufferScale = new NVector2(1f, 1f);
 
-            io.DisplaySize = new System.Numerics.Vector2(_graphicsDevice.PresentationParameters.BackBufferWidth, _graphicsDevice.PresentationParameters.BackBufferHeight);
-            io.DisplayFramebufferScale = new System.Numerics.Vector2(1f, 1f);
-
-            io.MousePos = new System.Numerics.Vector2(mouse.X, mouse.Y);
+            io.MousePos = new NVector2(mouse.X, mouse.Y);
 
             mouseDown[0] = mouse.LeftButton == ButtonState.Pressed;
             mouseDown[1] = mouse.RightButton == ButtonState.Pressed;
