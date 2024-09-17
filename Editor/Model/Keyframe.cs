@@ -1,133 +1,102 @@
-﻿using System;
+﻿#region
+using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Collections.Immutable;
+using System.Diagnostics;
 using System.Linq;
+#endregion
 
 namespace Editor.Model
 {
-    public class Keyframe : IComparable<Keyframe>
-    {
-        public KeyframeLink ContainingLink = null;
-        public int Frame { get; set; }
-        public object Value { get; set; }
-        public static implicit operator Keyframe(int value) => new Keyframe(value, null);
-        public Keyframe(int frame, object data)
-        {
-            Frame = frame;
-            Value = data;
-        }
-        public int CompareTo(Keyframe other)
-        {
-            if (ReferenceEquals(this, other)) return 0;
-            if (other is null) return 1;
-            return Frame.CompareTo(other.Frame);
-        }
-        public override int GetHashCode()
-        {
-            return Value.GetType().GetHashCode() ^ Frame;
-        }
-    }
-    public class KeyframeLink : IEnumerable<Keyframe>
-    {
-        public InterpolationType InterpolationType { get; set; }
-        private readonly List<Keyframe> keyframes = new List<Keyframe>();
-        public int Length => Keyframes.Count;
-        public float menuY;
-        public AnimationTrack track;
-        public IReadOnlyList<Keyframe> Keyframes
-        {
-            get => keyframes;
-        }
-        public Keyframe FirstKeyframe { get; private set; }
-        public Keyframe LastKeyframe { get; private set; }
-        public KeyframeLink(IEnumerable<Keyframe> keyframes)
-        {
-            foreach (var keyframe in keyframes)
-            {
-                Add(keyframe, false);
-            }
-            CalculateBorderKeyframes();
-            InterpolationType = InterpolationType.Lineal;
-        }
-        public IEnumerator<Keyframe> GetEnumerator()
-        {
-            return Keyframes.GetEnumerator();
-        }
-        IEnumerator IEnumerable.GetEnumerator()
-        {
-            return GetEnumerator();
-        }
-        public void Clear()
-        {
-            foreach (var keyframe in keyframes)
-            {
-                keyframe.ContainingLink = null;
-            }
-            keyframes.Clear();
-        }
-        public void Remove(Keyframe frame)
-        {
-            frame.ContainingLink = null;
-            keyframes.Remove(frame);
+	[DebuggerDisplay("{Value}")]
+	public class Keyframe : IComparable<Keyframe>
+	{
+		public readonly KeyframeableValue ContainingValue;
+		private object _value;
+		public KeyframeLink ContainingLink;
 
-            if (keyframes.Count == 0)
-                FirstKeyframe = LastKeyframe = null;
-            else
-                CalculateBorderKeyframes();
-        }
-        public void CalculateBorderKeyframes()
-        {
-            if (keyframes.Count == 0)
-            {
-                FirstKeyframe = null;
-                LastKeyframe = null;
-            }
-            else if (keyframes.Count == 1)
-            {
-                FirstKeyframe = keyframes[0];
-                LastKeyframe = keyframes[0];
-            }
-            else
-            {
-                keyframes.Sort();
-                FirstKeyframe = keyframes.First();
-                LastKeyframe = keyframes.Last();
-            }
-        }
-        public void Add(Keyframe frame, bool sort = true)
-        {
-            if (frame.ContainingLink != this)
-            {
-                frame.ContainingLink = this;
-                keyframes.Add(frame);
-                if (sort)
-                    CalculateBorderKeyframes();
-            }
-        }
+		public Keyframe(KeyframeableValue containingValue, int frame, object data)
+		{
+			ContainingValue = containingValue;
+			Frame = frame;
+			Value = data;
+		}
 
-        public KeyframeLink ExtractToNewLink()
-        {
-            KeyframeLink newLink = new KeyframeLink(Keyframes)
-            {
-                InterpolationType = InterpolationType,
-                menuY = menuY,
-                track = track
-            };
-            foreach (var keyframe in Keyframes)
-            {
-                keyframe.ContainingLink = newLink;
-            }
-            menuY = float.NaN;
-            track = null;
-            keyframes.Clear();
-            FirstKeyframe = null;
-            LastKeyframe = null;
-            return newLink;
-        }
+		public int Frame { get; set; }
+		public object Value
+		{
+			get => _value;
+			set
+			{
+				_value = value;
+				ContainingValue?.InvalidateCachedValue();
+			}
+		}
 
-    }
-    public enum InterpolationType : byte
-    {
-        Lineal, Squared, InverseSquared, BounceIn, BounceOut, BounceInOut, ElasticIn, ElasticOut, ElasticInOut, SmoothStep, Cubed, InverseCubed, CubedSmoothStep
-    }
+		public int CompareTo(Keyframe other) => Frame.CompareTo(other.Frame);
+
+		public static implicit operator Keyframe(int value) => new Keyframe(null, value, default);
+
+		public override int GetHashCode() => Value.GetType().GetHashCode() ^ Frame;
+	}
+	public class KeyframeLink : IEnumerable<Keyframe>
+	{
+		public readonly ImmutableArray<Keyframe> Keyframes;
+		public readonly KeyframeableValue linkedValue;
+
+		public KeyframeLink(KeyframeableValue linkedValue, IEnumerable<Keyframe> keyframes)
+		{
+			this.linkedValue = linkedValue;
+			Keyframes = keyframes.ToImmutableArray().Sort(); // ????
+
+			CalculateBorderKeyframes();
+			InterpolationType = InterpolationType.Lineal;
+		}
+
+		public Keyframe this[int index] => GetAt(index);
+		public InterpolationType InterpolationType { get; set; }
+		public int Length => Keyframes.Length;
+		public Keyframe FirstKeyframe { get; private set; }
+		public Keyframe LastKeyframe { get; private set; }
+
+		public IEnumerator<Keyframe> GetEnumerator() => Keyframes.ToList().GetEnumerator();
+
+		IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+		public Keyframe GetAt(int index) => Keyframes[index];
+
+		public KeyframeLink Add(Keyframe keyframe)
+		{
+			return new KeyframeLink(linkedValue, Keyframes.Add(keyframe));
+		}
+
+		public KeyframeLink Remove(Keyframe keyframe)
+		{
+			return new KeyframeLink(linkedValue, Keyframes.Remove(keyframe));
+		}
+
+		public void CalculateBorderKeyframes()
+		{
+			if (Keyframes.Length == 0)
+			{
+				FirstKeyframe = default;
+				LastKeyframe = default;
+			}
+			else if (Keyframes.Length == 1)
+			{
+				FirstKeyframe = Keyframes[0];
+				LastKeyframe = Keyframes[0];
+			}
+			else
+			{
+				FirstKeyframe = Keyframes.First();
+				LastKeyframe = Keyframes.Last();
+			}
+		}
+	}
+	public enum InterpolationType : byte
+	{
+		Lineal, Squared, InverseSquared, BounceIn, BounceOut, BounceInOut, ElasticIn, ElasticOut, ElasticInOut, SmoothStep, Cubed, InverseCubed, CubedSmoothStep
+	}
 }
