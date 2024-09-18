@@ -10,25 +10,25 @@ using System.Linq;
 
 namespace Editor.Gui
 {
-	public static partial class ImGuiEx
+	public static class Timeline
 	{
-		private const int MinimalLegendwidth = 196;
-		private const int LineStartOffset = 8;
+		public const int MinimalLegendwidth = 196;
+		public const int LineStartOffset = 8;
 
-		private const int pixelsPerFrame = 10;
-		private const int majorLinePerLines = 5;
+		public const int PixelsPerFrame = 10;
+		public const int MajorLinePerLines = 5;
 
-		private static NVector2 timelineRegionMin;
-		private static NVector2 timelineRegionMax;
+		public static NVector2 timelineRegionMin;
+		public static NVector2 timelineRegionMax;
 
-		private static float timelineZoom = 1, timelineZoomTarget = 1;
-		private static int currentLegendWidth;
+		public static float timelineZoom = 1, timelineZoomTarget = 1;
+		public static int currentLegendWidth;
 
 		public static int visibleStartingFrame;
 		public static int visibleEndingFrame;
 
-		private static float accumalatedPanningDeltaX;
-		private static bool isPanningTimeline;
+		public static float accumalatedPanningDeltaX;
+		public static bool isPanningTimeline;
 
 		private static readonly (string id, string text)[] toolbarButtonDefinitions =
 		{
@@ -41,7 +41,7 @@ namespace Editor.Gui
 			("Loop (L)", IcoMoon.LoopIcon.ToString())
 		};
 		private static (string trackId, int linkId, float accumulation) interpolationValue = (string.Empty, -1, 0);
-		public static KeyframeLink selectedLink;
+		public static SelectedLinkData selectedLink;
 		public static CreationLinkData newLinkCreationData;
 
 		public static void DrawUiTimeline(Animator animator)
@@ -61,7 +61,7 @@ namespace Editor.Gui
 			ImGui.SetNextItemWidth(48f);
 
 			int fps = animator.FPS;
-			ImGui.DragInt("##4", ref fps);
+			ImGui.DragInt("##4", ref fps, 1, 1, 40000);
 			animator.FPS = fps;
 
 			ImGui.SameLine();
@@ -74,7 +74,6 @@ namespace Editor.Gui
 			timelineZoomTarget = MathHelper.Clamp(timelineZoomTarget, 0.1f, 5f);
 
 			ImGui.BeginChild(1, NVector2.Zero);
-
 			{
 				ImGuiStylePtr style = ImGui.GetStyle();
 				NVector2 toolbarSize = DrawToolbar(animator, OnToolbarPressed);
@@ -87,11 +86,13 @@ namespace Editor.Gui
 				float oldTimelineZoomTarget = timelineZoomTarget; // im lazy
 				float headerHeightOrsmting = ImGui.GetItemRectSize().Y;
 				float endingFrame = visibleStartingFrame + (visibleEndingFrame - visibleStartingFrame) / timelineZoom;
+				bool isSelectedEntityValid = animator.RegisteredGraphics.TryGetValue(EditorApplication.Instance.selectedEntityId, out TextureEntity selectedEntity);
 
-				DrawTimeline(animator, style.ItemSpacing.Y, headerHeightOrsmting);
+				DrawTimeline(animator, isSelectedEntityValid, style.ItemSpacing.Y, headerHeightOrsmting);
 
 				ImGui.BeginChild("##content", NVector2.Zero);
 
+				if (isSelectedEntityValid)
 				{
 					// small hack to draw first keyframe correctly
 					ImGui.SetCursorPosY(ImGui.GetCursorPos().Y + 4);
@@ -99,7 +100,7 @@ namespace Editor.Gui
 					ImGui.Columns(2, "##legend", false);
 					ImGui.SetColumnWidth(0, currentLegendWidth);
 
-					RenderSelectedEntityKeyframes(animator, endingFrame, headerHeightOrsmting, oldTimelineZoomTarget);
+					RenderSelectedEntityKeyframes(selectedEntity, animator, endingFrame, headerHeightOrsmting, oldTimelineZoomTarget);
 
 					ImGui.EndChild();
 				}
@@ -108,14 +109,8 @@ namespace Editor.Gui
 			ImGui.EndChild();
 		}
 
-		private static unsafe void RenderSelectedEntityKeyframes(Animator animator, float endingFrame, float headerHeightOrsmting, float oldTimelineZoomTarget)
+		private static void RenderSelectedEntityKeyframes(TextureEntity selectedEntity, Animator animator, float endingFrame, float headerHeightOrsmting, float oldTimelineZoomTarget)
 		{
-			if (!animator.RegisteredGraphics.TryGetValue(EditorApplication.Instance.selectedEntityId, out TextureEntity selectedEntity))
-				return;
-
-			if (!Animator.EntityHasKeyframes(selectedEntity))
-				return;
-
 			bool open = ImGui.TreeNodeEx(selectedEntity.Name, ImGuiTreeNodeFlags.DefaultOpen);
 
 			ImGui.NextColumn();
@@ -123,41 +118,21 @@ namespace Editor.Gui
 			// draw entity keyframes
 			for (int frame = visibleStartingFrame; frame < endingFrame; frame++)
 			{
-				DrawMainKeyframe(frame);
+				if (animator.RegisteredGraphics.EntityHasKeyframeAtFrame(selectedEntity.Name, frame))
+				{
+					DrawMainKeyframe(frame);
+				}
 			}
 
 			ImGui.NextColumn();
 
 			if (open)
 			{
-				/*if (movingKeyframe && keyframesToMove != null)
-				{
-					int hoveringFrame = GetFrameForTimelinePos((ImGui.GetMousePos().X - timelineRegionMin.X) / timelineZoom);
-
-					foreach (var selectedKeyframe in keyframesToMove)
-					{
-						selectedKeyframe.Frame = hoveringFrame;
-						selectedKeyframe.ContainingLink?.CalculateBorderKeyframes();
-					}
-
-					ImGui.BeginTooltip();
-
-					if (keyframesToMove.Count > 1)
-						ImGui.SetTooltip($"Moviendo {keyframesToMove.Count} keyframes\nFrame nuevo: {hoveringFrame}");
-					else
-						ImGui.SetTooltip($"Frame nuevo: {hoveringFrame}");
-
-					ImGui.EndTooltip();
-				}*/
-
 				bool scrollingOnLink = false;
 				bool clickedLeft = ImGui.IsMouseClicked(ImGuiMouseButton.Left);
 
 				foreach (KeyframeableValue value in selectedEntity.EnumerateKeyframeableValues())
 				{
-					if (!value.HasKeyframes())
-						continue;
-
 					ImGui.Text(value.Name);
 					ImGui.NextColumn();
 
@@ -169,7 +144,9 @@ namespace Editor.Gui
 					for (int linkIndex = 0; linkIndex < value.links.Count; linkIndex++)
 					{
 						KeyframeLink link = value.links[linkIndex];
-						DrawLink(link, ImGui.GetCursorPosY(), selectedLink == link ? Color.SlateGray.PackedValue : Color.DarkGray.PackedValue, headerHeightOrsmting, out NVector2 min, out NVector2 max);
+						DrawLink(link, ImGui.GetCursorPosY(),
+							selectedLink != null && selectedLink.link == link ? Color.SlateGray.PackedValue : Color.DarkGray.PackedValue,
+							headerHeightOrsmting, out NVector2 min, out NVector2 max);
 
 						if (ImGui.IsMouseHoveringRect(min, max))
 						{
@@ -214,55 +191,52 @@ namespace Editor.Gui
 
 							if (clickedLeft)
 							{
-								selectedLink = link;
+								EditorApplication.SelectLink(link);
 
-								ImDrawListPtr drawListPtr = ImGui.GetWindowDrawList();
+								/*ImDrawListPtr drawListPtr = ImGui.GetWindowDrawList();
 								ImDrawVert* ptr = drawListPtr._VtxWritePtr.NativePtr;
 								ptr -= 4;
 								ptr[0].col = Color.SlateGray.PackedValue;
 								ptr[1].col = Color.SlateGray.PackedValue;
 								ptr[2].col = Color.SlateGray.PackedValue;
-								ptr[3].col = Color.SlateGray.PackedValue;
+								ptr[3].col = Color.SlateGray.PackedValue; me when i want to change the color in the same frame (nobody will notice)
+								*/
 							}
 
 							linkTooltip = $"Link {{{string.Join(", ", link.Keyframes.Select(v => v.Frame.ToString()))}}}\n({link.InterpolationType})";
 						}
 					}
 
-					foreach (Keyframe frame in value.GetRange(vStartIndex, vEndIndex - vStartIndex))
+					List<Keyframe> list = value.GetRange(vStartIndex, vEndIndex - vStartIndex);
+
+					for (int i = 0; i < list.Count; i++)
 					{
+						Keyframe keyframe = list[i];
 						Color color = Color.ForestGreen;
 
-						if (newLinkCreationData != null && newLinkCreationData.Contains(value, frame))
+						if (newLinkCreationData != null && newLinkCreationData.Contains(value, keyframe))
 							color = Color.LimeGreen;
 
-						DrawKeyFrame(frame.Frame, color, out NVector2 min, out NVector2 max);
+						DrawKeyFrame(keyframe.Frame, color, out NVector2 min, out NVector2 max);
 
 						if (ImGui.IsMouseHoveringRect(min, max))
 						{
-							int index = value.GetIndexOrNext(frame.Frame);
+							int index = value.GetIndexOrNext(keyframe.Frame);
 
 							if (clickedLeft)
 							{
-								EditorApplication.SetDragAction(new DragAction("MoveKeyframe", moved =>
-									{
-										if (!moved)
-											return;
+								animator.CurrentKeyframe = keyframe.Frame;
+								animator.Stop();
+								if (keyframe.ContainingLink is not null)
+									EditorApplication.SelectLink(keyframe.ContainingLink);
 
-										int hoveringFrame = GetFrameForTimelinePos((EditorApplication.mousePos.X - timelineRegionMin.X) / timelineZoom);
-										frame.Frame = hoveringFrame;
-									},
-									delegate
-									{
-										int hoveringFrame = GetFrameForTimelinePos((EditorApplication.mousePos.X - timelineRegionMin.X) / timelineZoom);
-										ImGui.SetTooltip($"Frame nuevo: {hoveringFrame}");
-									}, 10));
+								EditorApplication.SetDragAction(new MoveKeyframeDelegateAction([(value, i)]));
 							}
 
 							if ((clickedLeft || ImGui.IsMouseClicked(ImGuiMouseButton.Right)) && ImGui.GetIO().KeyCtrl)
 							{
 								if (newLinkCreationData == null)
-									newLinkCreationData = new CreationLinkData(value, frame.Frame, 0);
+									newLinkCreationData = new CreationLinkData(value, keyframe.Frame, 0);
 							}
 
 							if (ImGui.IsKeyDown(ImGuiKey.Delete))
@@ -271,9 +245,9 @@ namespace Editor.Gui
 							}
 
 							if (value.Name == RotationProperty)
-								keyframeTooltip = $"{(float)frame.Value * 180 / MathHelper.Pi}";
+								keyframeTooltip = $"{(float)keyframe.Value * 180 / MathHelper.Pi}";
 							else
-								keyframeTooltip = $"{frame.Value}";
+								keyframeTooltip = $"{keyframe.Value}";
 						}
 					}
 
@@ -316,46 +290,37 @@ namespace Editor.Gui
 
 			void DrawMainKeyframe(int frame)
 			{
-				if (animator.RegisteredGraphics.EntityHasKeyframeAtFrame(selectedEntity.Name, frame))
+				DrawKeyFrame(frame, Color.LightGray, out NVector2 min, out NVector2 max);
+
+				if (ImGui.IsMouseHoveringRect(min, max))
 				{
-					DrawKeyFrame(frame, Color.LightGray, out NVector2 min, out NVector2 max);
+					ImGui.BeginTooltip();
+					ImGui.Text($"Entity: {selectedEntity}\nFrame: {frame}");
+					ImGui.EndTooltip();
 
-					if (ImGui.IsMouseHoveringRect(min, max))
+					if (ImGui.IsMouseClicked(ImGuiMouseButton.Left))
 					{
-						ImGui.BeginTooltip();
-						ImGui.Text($"Entity: {selectedEntity}\nFrame: {frame}");
-						ImGui.EndTooltip();
+						animator.CurrentKeyframe = frame;
+						animator.Stop();
 
-						if (ImGui.IsMouseClicked(ImGuiMouseButton.Left))
+						List<(KeyframeableValue, int)> keyframesToMove = new List<(KeyframeableValue, int)>();
+
+						foreach (KeyframeableValue value in selectedEntity.EnumerateKeyframeableValues())
 						{
-							EditorApplication.SetDragAction(new DragAction("MoveKeyframes", moved =>
-								{
-									if (!moved)
-										return;
+							Keyframe keyframe = value.GetKeyframe(frame);
 
-									int hoveringFrame = GetFrameForTimelinePos((EditorApplication.mousePos.X - timelineRegionMin.X) / timelineZoom);
-
-									foreach (KeyframeableValue value in selectedEntity.EnumerateKeyframeableValues())
-									{
-										Keyframe keyframe = value.GetKeyframe(frame);
-
-										if (keyframe != null)
-											keyframe.Frame = hoveringFrame;
-									}
-								},
-								delegate
-								{
-									int hoveringFrame = GetFrameForTimelinePos((EditorApplication.mousePos.X - timelineRegionMin.X) / timelineZoom);
-									ImGui.SetTooltip($"Frame nuevo: {hoveringFrame}");
-								}, 10));
+							if (keyframe != null)
+								keyframesToMove.Add((value, value.IndexOfKeyframe(keyframe)));
 						}
 
-						if (ImGui.IsKeyDown(ImGuiKey.Delete))
+						EditorApplication.SetDragAction(new MoveKeyframeDelegateAction(keyframesToMove.ToArray()));
+					}
+
+					if (ImGui.IsKeyDown(ImGuiKey.Delete))
+					{
+						foreach (KeyframeableValue value in selectedEntity.EnumerateKeyframeableValues())
 						{
-							foreach (KeyframeableValue value in selectedEntity.EnumerateKeyframeableValues())
-							{
-								value.RemoveKeyframe(frame);
-							}
+							value.RemoveKeyframe(frame);
 						}
 					}
 				}
@@ -453,7 +418,7 @@ namespace Editor.Gui
 			return ImGui.GetItemRectSize();
 		}
 
-		private static void DrawTimeline(Animator animator, float headerYPadding, float headerHeight = 24f)
+		private static void DrawTimeline(Animator animator, bool isSelectedEntityValid, float headerYPadding, float headerHeight = 24f)
 		{
 			ImDrawListPtr drawList = ImGui.GetWindowDrawList();
 			ImGuiStylePtr style = ImGui.GetStyle();
@@ -483,7 +448,10 @@ namespace Editor.Gui
 					ImGui.EndTooltip();
 
 					if (ImGui.IsMouseDown(0))
+					{
 						animator.CurrentKeyframe = hoveringFrame;
+						animator.Stop();
+					}
 				}
 
 				// panning the timeline
@@ -500,12 +468,12 @@ namespace Editor.Gui
 						if (!ImGui.IsWindowFocused())
 							ImGui.SetWindowFocus();
 
-						int framesToMove = (int)Math.Floor(accumalatedPanningDeltaX / pixelsPerFrame);
+						int framesToMove = (int)Math.Floor(accumalatedPanningDeltaX / PixelsPerFrame);
 
 						if (framesToMove != 0)
 						{
 							isPanningTimeline = true;
-							accumalatedPanningDeltaX -= framesToMove * pixelsPerFrame;
+							accumalatedPanningDeltaX -= framesToMove * PixelsPerFrame;
 							visibleStartingFrame -= framesToMove;
 						}
 					}
@@ -525,10 +493,12 @@ namespace Editor.Gui
 				{
 					int frame = f + visibleStartingFrame;
 					NVector2 lineStart = timelineRegionMin;
-					lineStart.X += LineStartOffset + f * pixelsPerFrame * timelineZoom;
+					lineStart.X += LineStartOffset + f * PixelsPerFrame * timelineZoom;
 					NVector2 lineEnd = lineStart + NVector2.UnitY * headerSize.Y;
 
-					if (frame % majorLinePerLines == 0)
+					bool isMajorLine = frame % MajorLinePerLines == 0;
+
+					if (isMajorLine)
 					{
 						string numberString = frame.ToString();
 						float frameTextOffset = (float)Math.Floor(ImGui.CalcTextSize(numberString).X / 2);
@@ -536,9 +506,12 @@ namespace Editor.Gui
 						drawList.AddText(lineStart - NVector2.UnitX * frameTextOffset,
 							Color.White.PackedValue, numberString);
 
-						lineEnd.Y += timelineRegionMax.Y - headerSize.Y;
-						lineStart.Y += headerSize.Y * 0.5f;
-						drawList.AddLine(lineStart, lineEnd, ImGui.GetColorU32(ImGuiCol.Border));
+						if (isSelectedEntityValid)
+						{
+							lineEnd.Y += timelineRegionMax.Y - headerSize.Y;
+							lineStart.Y += headerSize.Y * 0.5f;
+							drawList.AddLine(lineStart, lineEnd, ImGui.GetColorU32(ImGuiCol.Border));
+						}
 					}
 					else
 					{
@@ -555,13 +528,19 @@ namespace Editor.Gui
 					frameLineStart.Y += headerSize.Y * 0.5f;
 
 					NVector2 frameLineEnd = frameLineStart;
-					frameLineEnd.Y += timelineRegionMax.Y;
+					frameLineEnd.Y += (timelineRegionMax.Y - timelineRegionMin.Y) * (isSelectedEntityValid ? 1 : 0.4f);
 
 					drawList.AddLine(frameLineStart, frameLineEnd, Color.Pink.PackedValue);
 
-					int radius = 5;
+					const int radius = 5;
 					frameLineStart.Y += radius;
 					drawList.AddCircleFilled(frameLineStart, radius, Color.Pink.PackedValue);
+				}
+
+				if (!isSelectedEntityValid)
+				{
+					drawList.AddText(timelineRegionMin + NVector2.UnitY * headerSize.Y * 3,
+						Color.White.PackedValue, "Selecciona una entidad para mostrar los fotogramas clave >:(");
 				}
 
 				if (newLinkCreationData != null)
@@ -633,9 +612,9 @@ namespace Editor.Gui
 			ImGui.GetWindowDrawList().AddRectFilled(min = position, max = position + size, color);
 		}
 
-		private static int GetFrameForTimelinePos(float x) => (int)(Math.Floor((x - LineStartOffset / timelineZoom) / pixelsPerFrame + 0.5f) + visibleStartingFrame);
+		public static int GetFrameForTimelinePos(float x) => (int)(Math.Floor((x - LineStartOffset / timelineZoom) / PixelsPerFrame + 0.5f) + visibleStartingFrame);
 
-		private static float GetTimelinePosForFrame(int frame) => (frame - visibleStartingFrame) * pixelsPerFrame * timelineZoom + LineStartOffset;
+		public static float GetTimelinePosForFrame(int frame) => (frame - visibleStartingFrame) * PixelsPerFrame * timelineZoom + LineStartOffset;
 	}
 	public class CreationLinkData
 	{

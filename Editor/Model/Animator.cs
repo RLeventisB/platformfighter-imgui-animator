@@ -1,4 +1,6 @@
 ﻿#region
+using Editor.Gui;
+
 using ImGuiNET;
 
 using System;
@@ -11,8 +13,8 @@ namespace Editor.Model
 {
 	public class Animator
 	{
-		public readonly EntityList<HitboxEntity> RegisteredHitboxes;
 		public readonly EntityList<TextureEntity> RegisteredGraphics;
+		public readonly EntityList<HitboxEntity> RegisteredHitboxes;
 
 		private int _currentKeyframe;
 		private int _framesPerSecond = 120;
@@ -27,7 +29,6 @@ namespace Editor.Model
 			RegisteredGraphics = new EntityList<TextureEntity>(graphicEntities);
 			FPS = 120;
 		}
-
 
 		public int CurrentKeyframe
 		{
@@ -220,7 +221,7 @@ namespace Editor.Model
 
 		public void UpdateTimelineInputs()
 		{
-			bool creatingLink = newLinkCreationData != null;
+			bool creatingLink = Timeline.newLinkCreationData != null;
 
 			if (creatingLink)
 			{
@@ -262,20 +263,20 @@ namespace Editor.Model
 			{
 				CurrentKeyframe = GetFirstFrame();
 
-				if (CurrentKeyframe <= visibleStartingFrame)
-					visibleStartingFrame = CurrentKeyframe;
-				else if (CurrentKeyframe >= visibleEndingFrame)
-					visibleStartingFrame += CurrentKeyframe - visibleEndingFrame + 1;
+				if (CurrentKeyframe <= Timeline.visibleStartingFrame)
+					Timeline.visibleStartingFrame = CurrentKeyframe;
+				else if (CurrentKeyframe >= Timeline.visibleEndingFrame)
+					Timeline.visibleStartingFrame += CurrentKeyframe - Timeline.visibleEndingFrame + 1;
 			}
 
 			if (ImGui.IsKeyPressed(ImGuiKey.End))
 			{
 				CurrentKeyframe = GetLastFrame();
 
-				if (CurrentKeyframe <= visibleStartingFrame)
-					visibleStartingFrame = CurrentKeyframe;
-				else if (CurrentKeyframe >= visibleEndingFrame)
-					visibleStartingFrame += CurrentKeyframe - visibleEndingFrame + 1;
+				if (CurrentKeyframe <= Timeline.visibleStartingFrame)
+					Timeline.visibleStartingFrame = CurrentKeyframe;
+				else if (CurrentKeyframe >= Timeline.visibleEndingFrame)
+					Timeline.visibleStartingFrame += CurrentKeyframe - Timeline.visibleEndingFrame + 1;
 			}
 		}
 
@@ -285,25 +286,25 @@ namespace Editor.Model
 
 			ImGuiIOPtr io = ImGui.GetIO();
 
-			if (io.KeyCtrl && ImGui.IsKeyPressed(ImGuiKey.LeftArrow) && newLinkCreationData.Border > 0)
+			if (io.KeyCtrl && ImGui.IsKeyPressed(ImGuiKey.LeftArrow) && Timeline.newLinkCreationData.Border > 0)
 			{
-				newLinkCreationData.offset--;
+				Timeline.newLinkCreationData.offset--;
 			}
 
-			if (io.KeyCtrl && ImGui.IsKeyPressed(ImGuiKey.RightArrow) && newLinkCreationData.Border < newLinkCreationData.value.KeyframeCount - 1)
+			if (io.KeyCtrl && ImGui.IsKeyPressed(ImGuiKey.RightArrow) && Timeline.newLinkCreationData.Border < Timeline.newLinkCreationData.value.KeyframeCount - 1)
 			{
-				newLinkCreationData.offset++;
+				Timeline.newLinkCreationData.offset++;
 			}
 
 			if (ImGui.IsKeyPressed(ImGuiKey.Escape))
 			{
-				newLinkCreationData = null;
+				Timeline.newLinkCreationData = null;
 			}
 
-			if (newLinkCreationData != null && newLinkCreationData.Length > 1 && ImGui.IsKeyChordPressed(ImGuiKey.Enter) )
+			if (Timeline.newLinkCreationData != null && Timeline.newLinkCreationData.Length > 1 && ImGui.IsKeyPressed(ImGuiKey.Enter))
 			{
-				newLinkCreationData.CreateLink();
-				newLinkCreationData = null;
+				Timeline.newLinkCreationData.CreateLink();
+				Timeline.newLinkCreationData = null;
 			}
 		}
 

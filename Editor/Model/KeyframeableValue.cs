@@ -11,7 +11,7 @@ namespace Editor.Model
 {
 	public class Vector2KeyframeValue : KeyframeableValue
 	{
-		public Vector2KeyframeValue(IEntity entity, string name, params string[] tags) : base(entity, name, typeof(Vector2), tags)
+		public Vector2KeyframeValue(IEntity entity, Vector2 defaultValue, string name, params string[] tags) : base(entity, defaultValue, name, typeof(Vector2), tags)
 		{
 		}
 
@@ -32,8 +32,6 @@ namespace Editor.Model
 			return success;
 		}
 
-		public override object GetDefaultValue() => Vector2.Zero;
-
 		public override void CacheValue(int frame)
 		{
 			Interpolate(this, frame, Vector2Interpolator, out object value);
@@ -42,7 +40,7 @@ namespace Editor.Model
 	}
 	public class FloatKeyframeValue : KeyframeableValue
 	{
-		public FloatKeyframeValue(IEntity entity, string name, params string[] tags) : base(entity, name, typeof(float), tags)
+		public FloatKeyframeValue(IEntity entity, float defaultValue, string name, params string[] tags) : base(entity, defaultValue, name, typeof(float), tags)
 		{
 		}
 
@@ -63,8 +61,6 @@ namespace Editor.Model
 			return success;
 		}
 
-		public override object GetDefaultValue() => 0f;
-
 		public override void CacheValue(int frame)
 		{
 			Interpolate(this, frame, FloatInterpolator, out object value);
@@ -73,7 +69,7 @@ namespace Editor.Model
 	}
 	public class IntKeyframeValue : KeyframeableValue
 	{
-		public IntKeyframeValue(IEntity entity, string name, params string[] tags) : base(entity, name, typeof(int), tags)
+		public IntKeyframeValue(IEntity entity, int defaultValue, string name, params string[] tags) : base(entity, defaultValue, name, typeof(int), tags)
 		{
 		}
 
@@ -94,8 +90,6 @@ namespace Editor.Model
 			return success;
 		}
 
-		public override object GetDefaultValue() => 0;
-
 		public override void CacheValue(int frame)
 		{
 			Interpolate(this, frame, IntegerInterpolator, out object value);
@@ -114,6 +108,7 @@ namespace Editor.Model
 		public static readonly IInterpolator FloatInterpolator = new DelegatedInterpolator<float>(
 			(fraction, first, second) => first + (second - first) * fraction,
 			(fraction, values) => CubicHermiteInterpolate(values, fraction));
+		public readonly object DefaultValue;
 
 		public readonly List<Keyframe> keyframes;
 		public readonly List<KeyframeLink> links;
@@ -121,14 +116,20 @@ namespace Editor.Model
 		public readonly Type type;
 		protected (object value, int frame) cachedValue;
 
-		protected KeyframeableValue(IEntity entity, string name, Type type, string[] tags)
+		protected KeyframeableValue(IEntity entity, object defaultValue, string name, Type type, string[] tags)
 		{
-			cachedValue = (GetDefaultValue(), -1);
+			DefaultValue = defaultValue;
+			cachedValue = (DefaultValue, -1);
 			Owner = entity;
 			Name = name;
 			this.tags = [..tags];
 			this.type = type;
-			keyframes = new List<Keyframe>();
+
+			keyframes = new List<Keyframe>
+			{
+				new Keyframe(this, 0, DefaultValue)
+			};
+
 			links = new List<KeyframeLink>();
 		}
 
@@ -137,14 +138,24 @@ namespace Editor.Model
 		public ref Keyframe this[int index] => ref CollectionsMarshal.AsSpan(keyframes)[index];
 		public int KeyframeCount => keyframes.Count;
 		public int FirstFrame => HasKeyframes() ? keyframes[0].Frame : -1;
-		public int LastFrame => HasKeyframes() ? keyframes[KeyframeCount-1].Frame : -1;
+		public int LastFrame => HasKeyframes() ? keyframes[KeyframeCount - 1].Frame : -1;
 		public Keyframe FirstKeyframe => HasKeyframes() ? keyframes[0] : null;
-		public Keyframe LastKeyframe => HasKeyframes() ? keyframes[KeyframeCount-1].Frame : null;
+		public Keyframe LastKeyframe => HasKeyframes() ? keyframes[KeyframeCount - 1].Frame : null;
 
-		public void Add(Keyframe value)
+		public int Add(Keyframe value)
 		{
-			keyframes.Add(value);
+			int index = FindIndexByKeyframe(value);
+
+			if (index >= 0)
+				keyframes[index] = value;
+			else
+			{
+				keyframes.Insert(~index, value);
+			}
+
 			InvalidateCachedValue();
+
+			return index;
 		}
 
 		public void RemoveAt(int index)
@@ -152,10 +163,11 @@ namespace Editor.Model
 			Keyframe keyframe = this[index];
 
 			if (keyframe.ContainingLink != null)
-				keyframe.ContainingLink = keyframes[index].ContainingLink.Remove(keyframes[index]);
+				keyframe.ContainingLink = keyframe.ContainingLink.Remove(keyframes[index]);
+
+			keyframes.RemoveAt(index);
 
 			InvalidateCachedValue();
-			keyframes.RemoveAt(index);
 		}
 
 		public void AddLink(KeyframeLink link)
@@ -165,9 +177,9 @@ namespace Editor.Model
 				keyframe.ContainingLink = link;
 			}
 
-			InvalidateCachedValue();
-
 			links.Add(link);
+
+			InvalidateCachedValue();
 		}
 
 		public void RemoveLink(KeyframeLink link)
@@ -177,14 +189,14 @@ namespace Editor.Model
 				keyframe.ContainingLink = null;
 			}
 
-			InvalidateCachedValue();
-
 			links.Remove(link);
+
+			InvalidateCachedValue();
 		}
 
 		public List<Keyframe> GetRange(int start, int count) => keyframes.GetRange(start, count);
 
-		public bool HasKeyframes() => keyframes.Count > 0;
+		public bool HasKeyframes() => keyframes != null && keyframes.Count > 0;
 
 		public bool HasKeyframeAtFrame(int frame) => GetKeyframe(frame) != null;
 
@@ -208,7 +220,7 @@ namespace Editor.Model
 
 		public static bool Interpolate(KeyframeableValue keyframeValue, int frame, IInterpolator interpolator, out object value)
 		{
-			value = keyframeValue.GetDefaultValue();
+			value = keyframeValue.DefaultValue;
 
 			if (!keyframeValue.HasKeyframes())
 				return false;
@@ -233,13 +245,13 @@ namespace Editor.Model
 
 				if (keyFrameIndex == 0)
 					return false;
-				
+
 				keyframe = keyframeValue.keyframes[keyFrameIndex - 1]; // obtener anterior frame
 			}
 
 			KeyframeLink link = keyframe.ContainingLink;
 
-			if (link is null || link.Keyframes.Length == 1)
+			if (link is null || link.Keyframes.Count == 1)
 			{
 				value = keyframe.Value;
 				keyframeValue.cachedValue = (value, frame);
@@ -302,9 +314,9 @@ namespace Editor.Model
 					break;
 			}
 
-			int i = (int)(link.Keyframes.Length * progress);
+			int i = (int)(link.Keyframes.Count * progress);
 
-			if (i >= link.Keyframes.Length)
+			if (i >= link.Keyframes.Count)
 				value = link.LastKeyframe.Value;
 			else
 			{
@@ -317,12 +329,11 @@ namespace Editor.Model
 			return true;
 		}
 
-		public abstract object GetDefaultValue();
 		public abstract void CacheValue(int frame);
 
 		public void InvalidateCachedValue()
 		{
-			cachedValue = (GetDefaultValue(), -1);
+			cachedValue = (DefaultValue, -1);
 			CacheValue(EditorApplication.State.Animator.CurrentKeyframe);
 		}
 
@@ -344,39 +355,32 @@ namespace Editor.Model
 		public Keyframe SetKeyframeValue(int frame, object data)
 		{
 			Keyframe keyframe = new Keyframe(this, frame, data);
-			int index = FindIndexByKeyframe(keyframe);
+			int index = Add(keyframe);
 
-
-			if (index < 0) // no keyframe to replace
+			if (index < 0) // keyframe was added
 			{
 				// check if last keyframe has same value
 				int indexBefore = ~index - 1;
 
 				if (indexBefore >= 0 && keyframes[indexBefore].Value == data)
 				{
+					RemoveAt(~index);
+
 					return null;
 				}
-				else
-				{
-					Add(keyframe);
-				}
 			}
-			else
+			else // keyframe replaced old keyframe
 			{
 				// check if last keyframe has same value
 
-				if(index - 1 >= 0 && keyframes[index - 1].Value.Equals(data))
+				if (index - 1 >= 0 && keyframes[index - 1].Value.Equals(data))
 				{
 					RemoveAt(index);
 
 					return null;
 				}
-				else
-				{
-					keyframes[index] = keyframe;
-				}
 			}
-			
+
 			InvalidateCachedValue();
 
 			return keyframe;
@@ -392,6 +396,16 @@ namespace Editor.Model
 			keyframes.RemoveAt(index);
 
 			return true;
+		}
+
+		public void SortFrames()
+		{
+			keyframes.Sort();
+		}
+
+		public int IndexOfKeyframe(Keyframe keyframe)
+		{
+			return keyframes.IndexOf(keyframe);
 		}
 	}
 }

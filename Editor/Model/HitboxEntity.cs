@@ -6,9 +6,9 @@ namespace Editor.Model
 	{
 		public HitboxEntity(string name)
 		{
-			SizeX = new FloatKeyframeValue(this, SizeXProperty);
-			SizeY = new FloatKeyframeValue(this, SizeYProperty);
-			Position = new Vector2KeyframeValue(this, PositionProperty);
+			SizeX = new FloatKeyframeValue(this, 16f, SizeXProperty);
+			SizeY = new FloatKeyframeValue(this, 16f, SizeYProperty);
+			Position = new Vector2KeyframeValue(this, Vector2.Zero, PositionProperty);
 			Name = name;
 		}
 

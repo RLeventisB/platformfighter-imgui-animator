@@ -9,10 +9,11 @@ using System.Linq;
 
 namespace Editor.Model
 {
-	[DebuggerDisplay("{Value}")]
+	[DebuggerDisplay("Frame = {Frame}, Value = {Value}")]
 	public class Keyframe : IComparable<Keyframe>
 	{
 		public readonly KeyframeableValue ContainingValue;
+		private int _frame;
 		private object _value;
 		public KeyframeLink ContainingLink;
 
@@ -23,7 +24,15 @@ namespace Editor.Model
 			Value = data;
 		}
 
-		public int Frame { get; set; }
+		public int Frame
+		{
+			get => _frame;
+			set
+			{
+				_frame = value;
+				ContainingLink?.ChangedFrame(this);
+			}
+		}
 		public object Value
 		{
 			get => _value;
@@ -42,23 +51,22 @@ namespace Editor.Model
 	}
 	public class KeyframeLink : IEnumerable<Keyframe>
 	{
-		public readonly ImmutableArray<Keyframe> Keyframes;
+		public readonly ImmutableSortedSet<Keyframe> Keyframes;
 		public readonly KeyframeableValue linkedValue;
 
 		public KeyframeLink(KeyframeableValue linkedValue, IEnumerable<Keyframe> keyframes)
 		{
 			this.linkedValue = linkedValue;
-			Keyframes = keyframes.ToImmutableArray().Sort(); // ????
+			Keyframes = keyframes.ToImmutableSortedSet(); // ????
 
-			CalculateBorderKeyframes();
 			InterpolationType = InterpolationType.Lineal;
 		}
 
 		public Keyframe this[int index] => GetAt(index);
 		public InterpolationType InterpolationType { get; set; }
-		public int Length => Keyframes.Length;
-		public Keyframe FirstKeyframe { get; private set; }
-		public Keyframe LastKeyframe { get; private set; }
+		public int Length => Keyframes.Count;
+		public Keyframe FirstKeyframe => Keyframes.FirstOrDefault((Keyframe)null);
+		public Keyframe LastKeyframe => Keyframes.LastOrDefault((Keyframe)null);
 
 		public IEnumerator<Keyframe> GetEnumerator() => Keyframes.ToList().GetEnumerator();
 
@@ -76,23 +84,8 @@ namespace Editor.Model
 			return new KeyframeLink(linkedValue, Keyframes.Remove(keyframe));
 		}
 
-		public void CalculateBorderKeyframes()
+		public void ChangedFrame(Keyframe keyframe)
 		{
-			if (Keyframes.Length == 0)
-			{
-				FirstKeyframe = default;
-				LastKeyframe = default;
-			}
-			else if (Keyframes.Length == 1)
-			{
-				FirstKeyframe = Keyframes[0];
-				LastKeyframe = Keyframes[0];
-			}
-			else
-			{
-				FirstKeyframe = Keyframes.First();
-				LastKeyframe = Keyframes.Last();
-			}
 		}
 	}
 	public enum InterpolationType : byte

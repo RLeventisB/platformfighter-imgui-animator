@@ -5,6 +5,7 @@ using Microsoft.Xna.Framework;
 
 using System;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 #endregion
 
@@ -175,6 +176,32 @@ namespace Editor.Gui
 			Console.WriteLine(obj);
 
 			return obj;
+		}
+
+		public static T AddDelegateOnce<T>(ref T action, T addedAction) where T : Delegate
+		{
+			if (action == null)
+				return action = addedAction;
+
+			if (!action.GetInvocationList().Contains(addedAction))
+			{
+				return action = (T)Delegate.Combine(action, addedAction);
+			}
+
+			return action;
+		}
+
+		public static T RemoveIfPresent<T>(ref T action, T addedAction) where T : Delegate
+		{
+			if (action == null)
+				return action = addedAction;
+
+			if (action.GetInvocationList().Contains(addedAction))
+			{
+				return action = (T)Delegate.RemoveAll(action, addedAction);
+			}
+
+			return action;
 		}
 
 		public static void Write(this BinaryWriter writer, NVector2 vector2)
