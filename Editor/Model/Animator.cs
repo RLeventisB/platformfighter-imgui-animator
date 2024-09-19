@@ -223,61 +223,10 @@ namespace Editor.Model
 		{
 			bool creatingLink = Timeline.newLinkCreationData != null;
 
-			if (creatingLink)
-			{
-				HandleNewLinkInputs();
-
+			if (!creatingLink)
 				return;
-			}
 
-			if (ImGui.IsKeyPressed(ImGuiKey.Enter))
-			{
-				PlayForward();
-			}
-
-			if (ImGui.IsKeyPressed(ImGuiKey.L))
-			{
-				ToggleLooping();
-			}
-
-			int lastFrame = GetLastFrame();
-			int firstFrame = GetFirstFrame();
-
-			if (ImGui.IsKeyPressed(ImGuiKey.LeftArrow))
-			{
-				CurrentKeyframe--;
-
-				if (Looping && HasKeyframes() && CurrentKeyframe < firstFrame)
-					CurrentKeyframe = lastFrame;
-			}
-
-			if (ImGui.IsKeyPressed(ImGuiKey.RightArrow))
-			{
-				CurrentKeyframe++;
-
-				if (Looping && HasKeyframes() && CurrentKeyframe > lastFrame)
-					CurrentKeyframe = firstFrame;
-			}
-
-			if (ImGui.IsKeyPressed(ImGuiKey.Home))
-			{
-				CurrentKeyframe = GetFirstFrame();
-
-				if (CurrentKeyframe <= Timeline.visibleStartingFrame)
-					Timeline.visibleStartingFrame = CurrentKeyframe;
-				else if (CurrentKeyframe >= Timeline.visibleEndingFrame)
-					Timeline.visibleStartingFrame += CurrentKeyframe - Timeline.visibleEndingFrame + 1;
-			}
-
-			if (ImGui.IsKeyPressed(ImGuiKey.End))
-			{
-				CurrentKeyframe = GetLastFrame();
-
-				if (CurrentKeyframe <= Timeline.visibleStartingFrame)
-					Timeline.visibleStartingFrame = CurrentKeyframe;
-				else if (CurrentKeyframe >= Timeline.visibleEndingFrame)
-					Timeline.visibleStartingFrame += CurrentKeyframe - Timeline.visibleEndingFrame + 1;
-			}
+			HandleNewLinkInputs();
 		}
 
 		private void HandleNewLinkInputs()

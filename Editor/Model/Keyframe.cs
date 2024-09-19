@@ -1,4 +1,6 @@
 ﻿#region
+using Editor.Gui;
+
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -53,6 +55,8 @@ namespace Editor.Model
 	{
 		public readonly ImmutableSortedSet<Keyframe> Keyframes;
 		public readonly KeyframeableValue linkedValue;
+		private InterpolationType _interpolationType;
+		public bool UseRelativeProgressCalculation = true;
 
 		public KeyframeLink(KeyframeableValue linkedValue, IEnumerable<Keyframe> keyframes)
 		{
@@ -63,11 +67,24 @@ namespace Editor.Model
 		}
 
 		public Keyframe this[int index] => GetAt(index);
-		public InterpolationType InterpolationType { get; set; }
+		public InterpolationType InterpolationType
+		{
+			get => _interpolationType;
+			set
+			{
+				_interpolationType = value;
+
+				if (Timeline.selectedLink != null && Timeline.selectedLink.link == this)
+				{
+					Timeline.selectedLink.CalculateExtraData();
+				}
+			}
+		}
 		public int Length => Keyframes.Count;
 		public Keyframe FirstKeyframe => Keyframes.FirstOrDefault((Keyframe)null);
 		public Keyframe LastKeyframe => Keyframes.LastOrDefault((Keyframe)null);
 
+		public Keyframe GetKeyframeClamped(int index) => Length== 0 ? null : Keyframes[Math.Clamp(index, 0, Length - 1)];
 		public IEnumerator<Keyframe> GetEnumerator() => Keyframes.ToList().GetEnumerator();
 
 		IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
@@ -90,6 +107,15 @@ namespace Editor.Model
 	}
 	public enum InterpolationType : byte
 	{
-		Lineal, Squared, InverseSquared, BounceIn, BounceOut, BounceInOut, ElasticIn, ElasticOut, ElasticInOut, SmoothStep, Cubed, InverseCubed, CubedSmoothStep
+		Lineal, 
+		Squared, InverseSquared,
+		BounceIn, BounceOut, BounceInOut,
+		ElasticIn, ElasticOut, ElasticInOut,
+		SmoothStep,
+		Cubed, InverseCubed, CubedSmoothStep, 
+		SineIn, SineOut, SineInOut, 
+		ExponentialIn, ExponentialOut, ExponentialInOut,
+		CircularIn, CircularOut, CircularInOut,
+		BackIn, BackOut, BackInOut
 	}
 }

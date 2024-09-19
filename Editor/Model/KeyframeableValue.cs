@@ -1,4 +1,5 @@
-﻿using Editor.Model.Interpolators;
+﻿using Editor.Gui;
+using Editor.Model.Interpolators;
 
 using System;
 using System.Collections.Generic;
@@ -99,15 +100,17 @@ namespace Editor.Model
 	[DebuggerDisplay("{Name}")]
 	public abstract class KeyframeableValue
 	{
+		// its 1:32 am i dont want to refactor another parameter on this boilerplate code
+		public static bool CacheValueOnInterpolate = true;
 		public static readonly IInterpolator Vector2Interpolator = new DelegatedInterpolator<Vector2>(
 			(fraction, first, second) => first + (second - first) * fraction,
-			(fraction, values) => CubicHermiteInterpolate(values, fraction));
+			(fraction, values) => InterpolateCatmullRom(values, fraction * (values.Length - 1)));
 		public static readonly IInterpolator IntegerInterpolator = new DelegatedInterpolator<int>(
 			(fraction, first, second) => (int)(first + (second - first) * fraction),
-			(fraction, values) => (int)CubicHermiteInterpolate(values.Select(v => (float)v).ToArray(), fraction));
+			(fraction, values) => InterpolateCatmullRom(values, fraction * (values.Length - 1)));
 		public static readonly IInterpolator FloatInterpolator = new DelegatedInterpolator<float>(
 			(fraction, first, second) => first + (second - first) * fraction,
-			(fraction, values) => CubicHermiteInterpolate(values, fraction));
+			(fraction, values) => InterpolateCatmullRom(values, fraction * (values.Length - 1)));
 		public readonly object DefaultValue;
 
 		public readonly List<Keyframe> keyframes;
@@ -189,6 +192,9 @@ namespace Editor.Model
 				keyframe.ContainingLink = null;
 			}
 
+			if (Timeline.selectedLink.link == link)
+				Timeline.selectedLink = null;
+
 			links.Remove(link);
 
 			InvalidateCachedValue();
@@ -225,7 +231,7 @@ namespace Editor.Model
 			if (!keyframeValue.HasKeyframes())
 				return false;
 
-			if (keyframeValue.cachedValue.frame == frame)
+			if (CacheValueOnInterpolate && keyframeValue.cachedValue.frame == frame)
 			{
 				value = keyframeValue.cachedValue.value;
 
@@ -241,90 +247,178 @@ namespace Editor.Model
 			}
 			else // esto no es para frames negativos!!!! soy extremadamente estupido!!!!!!!
 			{
-				keyFrameIndex = ~keyFrameIndex;
+				keyFrameIndex = ~keyFrameIndex - 1;
 
-				if (keyFrameIndex == 0)
-					return false;
+				if (keyFrameIndex < 0) // this only happens when the frame is positive, in the case of negative frames the first frame is obtained
+					keyFrameIndex = 0;
 
-				keyframe = keyframeValue.keyframes[keyFrameIndex - 1]; // obtener anterior frame
+				keyframe = keyframeValue.keyframes[keyFrameIndex]; // obtener anterior frame
 			}
 
 			KeyframeLink link = keyframe.ContainingLink;
 
-			if (link is null || link.Keyframes.Count == 1)
+			if (link is null || link.Length == 1)
 			{
 				value = keyframe.Value;
-				keyframeValue.cachedValue = (value, frame);
+				if (CacheValueOnInterpolate)
+					keyframeValue.cachedValue = (value, frame);
 
 				return true;
 			}
 
-			float progress = (frame - link.FirstKeyframe.Frame) / (float)(link.LastKeyframe.Frame - link.FirstKeyframe.Frame);
-			float lerpValue = progress;
+			if (frame <= 0) // fast returns
+			{
+				value = link.FirstKeyframe.Value;
+
+				return true;
+			}
+
+			if (frame >= link.LastKeyframe.Frame)
+			{
+				value = link.LastKeyframe.Value;
+
+				return true;
+			}
+
+			int linkFrameDuration = link.LastKeyframe.Frame - link.FirstKeyframe.Frame;
+			float progressedFrame = (frame - link.FirstKeyframe.Frame) / (float)linkFrameDuration;
+			float usedFrame = progressedFrame;
+			/*float progress;
+
+			if (link.UseRelativeProgressCalculation)
+			{
+				float localProgress = (frame - keyframe.Frame) / (float)(link.Keyframes[keyFrameIndex + 1].Frame - keyframe.Frame);
+				float frameProgress = (float)(keyframe.Frame - link.FirstKeyframe.Frame) / (link.LastKeyframe.Frame - link.FirstKeyframe.Frame);
+				progress = (keyFrameIndex + localProgress) / (link.Length - 1);
+			}
+			else
+			{
+				progress = (frame - link.FirstKeyframe.Frame) / (float)(link.LastKeyframe.Frame - link.FirstKeyframe.Frame);
+			}
+
+			float lerpValue = progress;*/
 
 			switch (link.InterpolationType)
 			{
 				case InterpolationType.Squared:
-					lerpValue *= lerpValue;
+					usedFrame *= progressedFrame;
 
 					break;
 				case InterpolationType.InverseSquared:
-					lerpValue = 1 - (1 - progress) * (1 - progress);
+					usedFrame = 1 - (1 - progressedFrame) * (1 - progressedFrame);
 
 					break;
 				case InterpolationType.SmoothStep:
-					lerpValue = Easing.Quadratic.InOut(progress);
+					usedFrame = Easing.Quadratic.InOut(progressedFrame);
 
 					break;
 				case InterpolationType.Cubed:
-					lerpValue *= lerpValue * lerpValue;
+					usedFrame *= progressedFrame * progressedFrame;
 
 					break;
 				case InterpolationType.InverseCubed:
-					lerpValue = 1 - (1 - progress) * (1 - progress) * (1 - progress);
+					usedFrame = 1 - (1 - progressedFrame) * (1 - progressedFrame) * (1 - progressedFrame);
 
 					break;
 				case InterpolationType.CubedSmoothStep:
-					lerpValue = Easing.Cubic.InOut(progress);
+					usedFrame = Easing.Cubic.InOut(progressedFrame);
 
 					break;
 				case InterpolationType.ElasticOut:
-					lerpValue = Easing.Elastic.Out(progress);
+					usedFrame = Easing.Elastic.Out(progressedFrame);
 
 					break;
 				case InterpolationType.ElasticInOut:
-					lerpValue = Easing.Elastic.InOut(progress);
+					usedFrame = Easing.Elastic.InOut(progressedFrame);
 
 					break;
 				case InterpolationType.ElasticIn:
-					lerpValue = Easing.Elastic.In(progress);
+					usedFrame = Easing.Elastic.In(progressedFrame);
 
 					break;
 				case InterpolationType.BounceIn:
-					lerpValue = Easing.Bounce.In(progress);
+					usedFrame = Easing.Bounce.In(progressedFrame);
 
 					break;
 				case InterpolationType.BounceOut:
-					lerpValue = Easing.Bounce.Out(progress);
+					usedFrame = Easing.Bounce.Out(progressedFrame);
 
 					break;
 				case InterpolationType.BounceInOut:
-					lerpValue = Easing.Bounce.InOut(progress);
+					usedFrame = Easing.Bounce.InOut(progressedFrame);
+
+					break;
+				case InterpolationType.SineIn:
+					usedFrame = Easing.Sinusoidal.In(progressedFrame);
+
+					break;
+				case InterpolationType.SineOut:
+					usedFrame = Easing.Sinusoidal.Out(progressedFrame);
+
+					break;
+				case InterpolationType.SineInOut:
+					usedFrame = Easing.Sinusoidal.InOut(progressedFrame);
+
+					break;
+				case InterpolationType.ExponentialIn:
+					usedFrame = Easing.Exponential.In(progressedFrame);
+
+					break;
+				case InterpolationType.ExponentialOut:
+					usedFrame = Easing.Exponential.Out(progressedFrame);
+
+					break;
+				case InterpolationType.ExponentialInOut:
+					usedFrame = Easing.Exponential.InOut(progressedFrame);
+
+					break;
+				case InterpolationType.CircularIn:
+					usedFrame = Easing.Circular.In(progressedFrame);
+
+					break;
+				case InterpolationType.CircularOut:
+					usedFrame = Easing.Circular.Out(progressedFrame);
+
+					break;
+				case InterpolationType.CircularInOut:
+					usedFrame = Easing.Circular.InOut(progressedFrame);
+
+					break;
+				case InterpolationType.BackIn:
+					usedFrame = Easing.Back.In(progressedFrame);
+
+					break;
+				case InterpolationType.BackOut:
+					usedFrame = Easing.Back.Out(progressedFrame);
+
+					break;
+				case InterpolationType.BackInOut:
+					usedFrame = Easing.Back.InOut(progressedFrame);
 
 					break;
 			}
 
-			int i = (int)(link.Keyframes.Count * progress);
-
-			if (i >= link.Keyframes.Count)
-				value = link.LastKeyframe.Value;
-			else
+			if (link.UseRelativeProgressCalculation)
 			{
-				object[] objects = link.Keyframes.Select(v => v.Value).ToArray();
-				value = interpolator.Interpolate(lerpValue, objects);
+				float interpolatedFrame = usedFrame * linkFrameDuration;
+				keyFrameIndex = keyframeValue.FindIndexByKeyframe((int)interpolatedFrame);
+
+				if (keyFrameIndex < 0)
+				{
+					keyFrameIndex = ~keyFrameIndex - 1;
+				}
+
+				keyFrameIndex = Math.Clamp(keyFrameIndex, 0, link.Length - 2);
+
+				float localProgress = (interpolatedFrame - link.GetKeyframeClamped(keyFrameIndex).Frame) / (link.GetKeyframeClamped(keyFrameIndex + 1).Frame - link.GetKeyframeClamped(keyFrameIndex).Frame);
+				usedFrame = (keyFrameIndex + localProgress) / (link.Length - 1);
 			}
 
-			keyframeValue.cachedValue = (value, frame);
+			object[] objects = link.Keyframes.Select(v => v.Value).ToArray();
+			value = interpolator.Interpolate(usedFrame, objects);
+
+			if (CacheValueOnInterpolate)
+				keyframeValue.cachedValue = (value, frame);
 
 			return true;
 		}

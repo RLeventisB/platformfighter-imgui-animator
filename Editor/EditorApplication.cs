@@ -1,5 +1,7 @@
 ﻿global using NVector2 = System.Numerics.Vector2;
+global using NVector4 = System.Numerics.Vector4;
 global using Vector2 = Microsoft.Xna.Framework.Vector2;
+global using Vector4 = Microsoft.Xna.Framework.Vector4;
 
 global using static Editor.Gui.ImGuiEx;
 
@@ -25,8 +27,7 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-
-using Vector4 = System.Numerics.Vector4;
+using System.Runtime.InteropServices.Marshalling;
 
 namespace Editor
 {
@@ -83,7 +84,7 @@ namespace Editor
 		///     3 = Mostrar frame nuevo al mover keyframes
 		///     4 = Reproducir al seleccionar keyframe
 		/// </summary>
-		private BitArray settingsFlags = new BitArray(12);
+		public static BitArray settingsFlags = new BitArray(12);
 
 		public EditorApplication()
 		{
@@ -168,11 +169,11 @@ namespace Editor
 			_imguiRenderer.RebuildFontAtlas();
 
 			ImGui.StyleColorsDark();
-			RangeAccessor<Vector4> colors = ImGui.GetStyle().Colors;
+			RangeAccessor<NVector4> colors = ImGui.GetStyle().Colors;
 
 			for (int i = 0; i < colors.Count; i++) // nome guta el azul >:(
 			{
-				ref Vector4 color = ref colors[i];
+				ref NVector4 color = ref colors[i];
 				float r = color.X;
 				float b = color.Z;
 				color.Z = r * (1 + b - r);
@@ -366,9 +367,7 @@ namespace Editor
 			ImGui.SetNextWindowPos(new NVector2(0, GraphicsDevice.Viewport.Height - 250), ImGuiCond.Always);
 			ImGui.SetNextWindowSize(NVector2.UnitX * (GraphicsDevice.Viewport.Width - hierarchyWindowWidth) + NVector2.UnitY * GraphicsDevice.Viewport.Height, ImGuiCond.Always);
 
-			ImGui.Begin("timeline", ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoResize);
 			Timeline.DrawUiTimeline(State.Animator);
-			ImGui.End();
 
 			ImGui.SetNextWindowPos(new NVector2(GraphicsDevice.Viewport.Width - hierarchyWindowWidth, 0), ImGuiCond.Always);
 
@@ -397,13 +396,15 @@ namespace Editor
 		{
 			switch (Timeline.selectedLink.propertyName)
 			{
-				case PositionProperty: // draw all keyframe 
+				case PositionProperty when settingsFlags.Get(0): // draw all keyframe 
 					unsafe
 					{
-						Vector2[] linePreview = Timeline.selectedLink.extraData;
-						GCHandle handle = GCHandle.Alloc(linePreview, GCHandleType.Pinned);
-						drawList.AddPolyline(ref Unsafe.AsRef<NVector2>((Vector2*)handle.AddrOfPinnedObject()), linePreview.Length, 0xBBBBBBBB, ImDrawFlags.RoundCornersAll, 2);
-						handle.Free();
+						Vector2[] linkPreview = (Vector2[])Timeline.selectedLink.extraData;
+
+						fixed (void* ohno = linkPreview)
+						{
+							drawList.AddPolyline(ref Unsafe.AsRef<NVector2>(ohno), linkPreview.Length, 0xBBBBBBBB, ImDrawFlags.RoundCornersAll, 2);
+						}
 					}
 
 					foreach (Keyframe keyframe in Timeline.selectedLink.link.Keyframes)
@@ -427,10 +428,44 @@ namespace Editor
 					}
 
 					break;
+				case RotationProperty when settingsFlags.Get(1):
+					for (int index = 0; index < Timeline.selectedLink.link.Keyframes.Count; index++)
+					{
+						Keyframe keyframe = Timeline.selectedLink.link.Keyframes[index];
+						float rotation = ((float[])Timeline.selectedLink.extraData)[index];
+						
+						Vector2 position = Camera.WorldToScreen((Vector2)keyframe.Value);
+						bool hover = IsInsideRectangle(position, new Vector2(10), ImGui.GetMousePos());
+						RenderRotationIcon(drawList, position, rotation);
+						drawList.AddNgon(new NVector2(position.X, position.Y), 10, hover ? 0xCCCCCCCC : 0x77777777, 4);
+
+						if (hover && ImGui.IsMouseClicked(ImGuiMouseButton.Left) && currentDragAction is null)
+						{
+							State.Animator.CurrentKeyframe = keyframe.Frame;
+							State.Animator.Stop();
+							SetDragAction(new DelegateDragAction("DragRotationKeyframe",
+								delegate
+								{
+									Vector2 diff = mouseWorld - position;
+									keyframe.Value = Math.Atan2(diff.Y, diff.X);
+									Timeline.selectedLink.CalculateExtraData();
+								}));
+						}
+					}
+
+					break;
 			}
 		}
+		private void RenderRotationIcon(ImDrawListPtr drawList, Vector2 worldPos, float rotation)
+		{
+			Vector2 position = Camera.WorldToScreen(worldPos);
+			(float sin, float cos) = MathF.SinCos(rotation);
 
-		private unsafe void RenderRotateIcon(ImDrawListPtr drawList)
+			ImFontGlyphPtr glyph = ImGui.GetIO().Fonts.Fonts[0].FindGlyph(IcoMoon.NextArrowIcon);
+			RenderIcon(drawList, glyph, position, sin, cos);
+		}
+
+		private void RenderRotateIcon(ImDrawListPtr drawList)
 		{
 			TextureEntity textureEntity = State.GraphicEntities[selectedEntityId];
 			NVector2 textureSize = State.GetTexture(textureEntity.TextureId).FrameSize;
@@ -440,9 +475,15 @@ namespace Editor
 			float rotation = textureEntity.Rotation.CachedValue;
 			(float sin, float cos) = MathF.SinCos(rotation);
 
-			position.X += cos * (16f + textureSize.X / 2 * scale.X);
-			position.Y += sin * (16f + textureSize.X / 2 * scale.X);
+			float length = 16f + textureSize.X / 2 * scale.X;
+			position.X += cos * length;
+			position.Y += sin * length;
 			ImFontGlyphPtr glyph = ImGui.GetIO().Fonts.Fonts[0].FindGlyph(IcoMoon.RotateIcon);
+			RenderIcon(drawList, glyph, position, sin, cos);
+		}
+
+		private unsafe void RenderIcon(ImDrawListPtr drawList, ImFontGlyphPtr glyph, Vector2 position, float sin, float cos)
+		{
 			float* glyphDataPtr = (float*)glyph.NativePtr; // jaja imgui.net no acepta el commit DE 4 AÑOS que añade bitfields el cual arregla el orden de ImFontGlyph
 
 			(NVector2 tl, NVector2 tr, NVector2 bl, NVector2 br) = GetQuads(position.X, position.Y, -8, -8, 16, 16, sin, cos);
@@ -725,10 +766,10 @@ namespace Editor
 									TextureEntity entity = new TextureEntity(name, textureId);
 
 									ReadSavedKeyframes(reader, entity);
-									
+
 									State.GraphicEntities.Add(name, entity);
 								}
-								
+
 								count = reader.ReadInt32();
 								State.HitboxEntities.EnsureCapacity(count);
 
@@ -738,7 +779,7 @@ namespace Editor
 									HitboxEntity entity = new HitboxEntity(name);
 
 									ReadSavedKeyframes(reader, entity);
-									
+
 									State.HitboxEntities.Add(name, entity);
 								}
 
@@ -767,15 +808,15 @@ namespace Editor
 
 						switch (value.DefaultValue)
 						{
-							case float :
+							case float:
 								data = reader.ReadSingle();
 
 								break;
-							case int :
+							case int:
 								data = reader.ReadInt32();
 
 								break;
-							case Vector2 :
+							case Vector2:
 								data = reader.ReadVector2();
 
 								break;
@@ -791,6 +832,7 @@ namespace Editor
 					{
 						List<Keyframe> keyframesInLink = new List<Keyframe>();
 						InterpolationType type = (InterpolationType)reader.ReadByte();
+						bool relativeThing = reader.ReadBoolean();
 						keyframeCount = reader.ReadInt32();
 
 						for (int l = 0; l < keyframeCount; l++)
@@ -801,7 +843,8 @@ namespace Editor
 
 						value.AddLink(new KeyframeLink(value, keyframesInLink)
 						{
-							InterpolationType = type
+							InterpolationType = type,
+							UseRelativeProgressCalculation = relativeThing
 						});
 					}
 				}
@@ -838,7 +881,7 @@ namespace Editor
 
 						SaveEntityKeyframes(entity, writer);
 					}
-					
+
 					writer.Write(State.HitboxEntities.Count);
 
 					foreach (HitboxEntity entity in State.Animator.RegisteredHitboxes)
@@ -885,6 +928,7 @@ namespace Editor
 					foreach (KeyframeLink link in value.links)
 					{
 						writer.Write((byte)link.InterpolationType);
+						writer.Write(link.UseRelativeProgressCalculation);
 						writer.Write(link.Keyframes.Count);
 
 						foreach (Keyframe linkKeyframes in link.Keyframes)
@@ -1276,29 +1320,45 @@ namespace Editor
 
 		public KeyframeLink link { get; init; }
 		public string propertyName { get; init; }
-		public Vector2[] extraData { get; set; }
+		public object extraData { get; set; }
 
 		public void CalculateExtraData()
 		{
-			List<Vector2> extraData = new List<Vector2>();
 			RemoveIfPresent(ref EditorApplication.Camera.OnDirty, CalculateExtraData);
 
 			switch (propertyName)
 			{
-				case PositionProperty:
+				case PositionProperty when EditorApplication.settingsFlags.Get(0):
+					List<Vector2> positions = new List<Vector2>();
+
 					AddDelegateOnce(ref EditorApplication.Camera.OnDirty, CalculateExtraData);
 					int minFrame = link.FirstKeyframe.Frame;
 					int maxFrame = link.LastKeyframe.Frame;
 
+					KeyframeableValue.CacheValueOnInterpolate = false;
+
 					for (int i = minFrame; i <= maxFrame; i++)
 					{
-						extraData.Add(EditorApplication.Camera.WorldToScreen(((Vector2KeyframeValue)link.linkedValue).Interpolate(i)));
+						positions.Add(EditorApplication.Camera.WorldToScreen(((Vector2KeyframeValue)link.linkedValue).Interpolate(i)));
 					}
+
+					KeyframeableValue.CacheValueOnInterpolate = true;
+					extraData = positions.ToArray();
+
+					break;
+				case RotationProperty when EditorApplication.settingsFlags.Get(1):
+					List<float> rotations = new List<float>();
+
+					foreach (Keyframe keyframe in link.Keyframes)
+					{
+						rotations.Add((float)keyframe.Value);
+					}
+
+					extraData = rotations.ToArray();
 
 					break;
 			}
 
-			this.extraData = extraData.ToArray();
 		}
 	}
 }

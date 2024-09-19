@@ -4,6 +4,7 @@ using ImGuiNET;
 using Microsoft.Xna.Framework;
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -46,6 +47,7 @@ namespace Editor.Gui
 			return Math.Abs(point.X - position.X) <= size.X / 2 && Math.Abs(point.Y - position.Y) <= size.Y / 2;
 		}
 
+		#region Cubic Hermite Splite implementation that i didnt like
 		// https://en.wikibooks.org/wiki/Cg_Programming/Unity/Hermite_Curves and chatgpt IM SORRY but I cant understand this
 		public static float CubicHermiteInterpolate(float[] points, float t)
 		{
@@ -170,6 +172,59 @@ namespace Editor.Gui
 
 			return tangents;
 		}
+		#endregion
+
+		public static int InterpolateCatmullRom(int[] values, float progress)
+		{
+			if (values.Length < 2)
+				throw new ArgumentException("At least two points are required for interpolation.");
+
+			List<int> valuesList = new List<int>();
+			valuesList.Add(2 * values[0] - values[1]);
+			valuesList.AddRange(values);
+			valuesList.Add(2 * values[^1] - values[^2]);
+
+			int index = Math.Clamp((int)progress, 0, values.Length - 1) + 1;
+			float localProgress = progress - index + 1;
+
+			return (int)MathHelper.CatmullRom(valuesList[index - 1], valuesList[index], valuesList[index + 1], valuesList[index + 2], localProgress);
+		}
+
+		public static float InterpolateCatmullRom(float[] values, float progress)
+		{
+			if (values.Length < 2)
+				throw new ArgumentException("At least two points are required for interpolation.");
+
+			List<float> valuesList = new List<float>();
+			valuesList.Add(2 * values[0] - values[1]);
+			valuesList.AddRange(values);
+			valuesList.Add(2 * values[^1] - values[^2]);
+
+			int index = Math.Clamp((int)progress, 0, values.Length - 1) + 1;
+			float localProgress = progress - index + 1;
+
+			return MathHelper.CatmullRom(valuesList[index - 1], valuesList[index], valuesList[index + 1], valuesList[index + 2], localProgress);
+		}
+
+		public static Vector2 InterpolateCatmullRom(Vector2[] points, float progress)
+		{
+			if (points.Length < 2)
+				throw new ArgumentException("At least two points are required for interpolation.");
+
+			List<Vector2> pointsList = new List<Vector2>();
+			pointsList.Add(2 * points[0] - points[1]);
+			pointsList.AddRange(points);
+			pointsList.Add(2 * points[^1] - points[^2]);
+
+			int index = Math.Clamp((int)progress, 0, points.Length - 2) + 1;
+			float localProgress = progress - index + 1;
+
+			return Vector2.CatmullRom(pointsList[index - 1], pointsList[index], pointsList[index + 1], pointsList[index + 2], localProgress);
+		}
+
+		public static float Modulas(float input, float divisor) => (input % divisor + divisor) % divisor;
+		public static int Modulas(int input, int divisor) => (input % divisor + divisor) % divisor;
+		public static short Modulas(short input, int divisor) => (short)((input % divisor + divisor) % divisor);
 
 		public static T Log<T>(this T obj)
 		{
@@ -351,6 +406,9 @@ namespace Editor.Gui
 
 			public const char PreviousIcon = '\uea23';
 			public const char NextIcon = '\uea24';
+
+			public const char PreviousArrowIcon = '\uea40';
+			public const char NextArrowIcon = '\uea3c';
 
 			public const char FirstIcon = '\uea21';
 			public const char LastIcon = '\uea22';

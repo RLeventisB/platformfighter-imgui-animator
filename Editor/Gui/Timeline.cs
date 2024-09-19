@@ -10,9 +10,11 @@ using System.Linq;
 
 namespace Editor.Gui
 {
+	using ToolbarButton = (string name, char icon, Predicate<Animator> state, ImGuiKey shortcut, Action<Animator> onPress);
+
 	public static class Timeline
 	{
-		public const int MinimalLegendwidth = 196;
+		public const int MinimalLegendWidth = 196;
 		public const int LineStartOffset = 8;
 
 		public const int PixelsPerFrame = 10;
@@ -30,29 +32,82 @@ namespace Editor.Gui
 		public static float accumalatedPanningDeltaX;
 		public static bool isPanningTimeline;
 
-		private static readonly (string id, string text)[] toolbarButtonDefinitions =
-		{
-			("First (Home)", IcoMoon.FirstIcon.ToString()),
-			("Previous", IcoMoon.PreviousIcon.ToString()),
-			("Backward", IcoMoon.BackwardIcon.ToString()),
-			("Forward (Enter)", IcoMoon.ForwardIcon.ToString()),
-			("Next", IcoMoon.NextIcon.ToString()),
-			("Last (End)", IcoMoon.LastIcon.ToString()),
-			("Loop (L)", IcoMoon.LoopIcon.ToString())
-		};
-		private static (string trackId, int linkId, float accumulation) interpolationValue = (string.Empty, -1, 0);
+		private static readonly ToolbarButton[] toolbarButtonDefinitions =
+		[
+			("First keyframe", IcoMoon.FirstIcon, null, ImGuiKey.Home, v =>
+			{
+				v.CurrentKeyframe = v.GetFirstFrame();
+
+				if (v.CurrentKeyframe <= visibleStartingFrame) // move timeline to see starting frame
+					visibleStartingFrame = v.CurrentKeyframe;
+				else if (v.CurrentKeyframe >= visibleEndingFrame)
+					visibleStartingFrame += v.CurrentKeyframe - visibleEndingFrame + 1;
+			}),
+			("Previous keyframe", IcoMoon.PreviousIcon, null, ImGuiKey.ModShift | ImGuiKey.LeftArrow, v =>
+			{
+				v.CurrentKeyframe = v.GetPreviousFrame();
+			}),
+			("Previous frame", IcoMoon.PreviousArrowIcon, null, ImGuiKey.LeftArrow, v =>
+			{
+				int firstFrame = v.GetFirstFrame();
+				int lastFrame = v.GetLastFrame();
+
+				v.CurrentKeyframe--;
+
+				if (v.Looping && v.HasKeyframes() && v.CurrentKeyframe < firstFrame)
+					v.CurrentKeyframe = lastFrame;
+			}),
+			("Backward", IcoMoon.BackwardIcon, v => v.PlayingBackward, ImGuiKey.ModShift | ImGuiKey.Enter, v =>
+			{
+				v.PlayBackward();
+			}),
+			("Forward", IcoMoon.ForwardIcon, v => v.PlayingForward, ImGuiKey.Enter, v =>
+			{
+				v.PlayForward();
+			}),
+			("Next frame", IcoMoon.NextArrowIcon, null, ImGuiKey.RightArrow, v =>
+			{
+				int firstFrame = v.GetFirstFrame();
+				int lastFrame = v.GetLastFrame();
+
+				v.CurrentKeyframe++;
+
+				if (v.Looping && v.HasKeyframes() && v.CurrentKeyframe > lastFrame)
+					v.CurrentKeyframe = firstFrame;
+			}),
+			("Next keyframe", IcoMoon.NextIcon, null, ImGuiKey.ModShift | ImGuiKey.RightArrow, v =>
+			{
+				v.CurrentKeyframe = v.GetNextFrame();
+			}),
+			("Last keyframe", IcoMoon.LastIcon, null, ImGuiKey.End, v =>
+			{
+				v.CurrentKeyframe = v.GetLastFrame();
+
+				if (v.CurrentKeyframe <= visibleStartingFrame)
+					visibleStartingFrame = v.CurrentKeyframe;
+				else if (v.CurrentKeyframe >= visibleEndingFrame)
+					visibleStartingFrame += v.CurrentKeyframe - visibleEndingFrame + 1;
+			}),
+			("Loop", IcoMoon.LoopIcon, v => v.Looping, ImGuiKey.L, v =>
+			{
+				v.ToggleLooping();
+			})
+		];
+		private static (string trackId, int linkId, float accumulation) linkInterpolationData = (string.Empty, -1, 0);
 		public static SelectedLinkData selectedLink;
 		public static CreationLinkData newLinkCreationData;
 
 		public static void DrawUiTimeline(Animator animator)
 		{
+			ImGui.Begin("Timeline", ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoResize);
+
 			ImGui.AlignTextToFramePadding();
 			ImGui.Text("Current:");
 			ImGui.SameLine();
 			ImGui.SetNextItemWidth(48f);
 
 			int ckf = animator.CurrentKeyframe;
-			ImGui.DragInt("##1", ref ckf);
+			ImGui.DragInt("##CurrentFrameValue", ref ckf);
 			animator.CurrentKeyframe = ckf;
 
 			ImGui.SameLine();
@@ -61,7 +116,7 @@ namespace Editor.Gui
 			ImGui.SetNextItemWidth(48f);
 
 			int fps = animator.FPS;
-			ImGui.DragInt("##4", ref fps, 1, 1, 40000);
+			ImGui.DragInt("##FpsValue", ref fps, 1, 1, 40000);
 			animator.FPS = fps;
 
 			ImGui.SameLine();
@@ -70,15 +125,15 @@ namespace Editor.Gui
 			ImGui.SetNextItemWidth(48f);
 
 			// var zoom = timelineZoomTarget;
-			ImGui.DragFloat("##5", ref timelineZoomTarget, 0.1f, 0.1f, 5f);
+			ImGui.DragFloat("##ZoomValue", ref timelineZoomTarget, 0.1f, 0.1f, 5f);
 			timelineZoomTarget = MathHelper.Clamp(timelineZoomTarget, 0.1f, 5f);
 
-			ImGui.BeginChild(1, NVector2.Zero);
+			if (ImGui.BeginChild("KeyframeViewer"))
 			{
 				ImGuiStylePtr style = ImGui.GetStyle();
-				NVector2 toolbarSize = DrawToolbar(animator, OnToolbarPressed);
+				NVector2 toolbarSize = DrawToolbarButtons(animator);
 
-				currentLegendWidth = (int)(toolbarSize.X >= MinimalLegendwidth ? toolbarSize.X : MinimalLegendwidth);
+				currentLegendWidth = (int)(toolbarSize.X >= MinimalLegendWidth ? toolbarSize.X : MinimalLegendWidth);
 				currentLegendWidth += (int)(style.ItemSpacing.Y + style.ItemSpacing.X * 2);
 
 				ImGui.SameLine(currentLegendWidth);
@@ -107,6 +162,8 @@ namespace Editor.Gui
 			}
 
 			ImGui.EndChild();
+
+			ImGui.End();
 		}
 
 		private static void RenderSelectedEntityKeyframes(TextureEntity selectedEntity, Animator animator, float endingFrame, float headerHeightOrsmting, float oldTimelineZoomTarget)
@@ -154,33 +211,22 @@ namespace Editor.Gui
 
 							if (mouseWheel != 0)
 							{
-								if (interpolationValue.trackId != value.Name || interpolationValue.linkId != linkIndex)
+								if (linkInterpolationData.trackId != value.Name || linkInterpolationData.linkId != linkIndex)
 								{
-									interpolationValue.trackId = value.Name;
-									interpolationValue.linkId = linkIndex;
-									interpolationValue.accumulation = 0;
+									linkInterpolationData.trackId = value.Name;
+									linkInterpolationData.linkId = linkIndex;
+									linkInterpolationData.accumulation = 0;
 								}
 
-								interpolationValue.accumulation += mouseWheel;
+								linkInterpolationData.accumulation += mouseWheel;
 
-								if (interpolationValue.accumulation >= 1)
+								while (Math.Abs(linkInterpolationData.accumulation) >= 1) // cursed but works
 								{
-									link.InterpolationType++;
-
-									if ((byte)link.InterpolationType > Enum.GetValues<InterpolationType>().Length - 1)
-									{
-										link.InterpolationType = 0;
-									}
-								}
-
-								if (interpolationValue.accumulation <= -1)
-								{
-									link.InterpolationType--;
-
-									if ((byte)link.InterpolationType == byte.MaxValue)
-									{
-										link.InterpolationType = Enum.GetValues<InterpolationType>().Last();
-									}
+									int difference = (int)(linkInterpolationData.accumulation > 0 ? Math.Floor(linkInterpolationData.accumulation) : Math.Ceiling(linkInterpolationData.accumulation));
+									int newValue = (int)link.InterpolationType + difference;
+									link.InterpolationType = (InterpolationType)Modulas(newValue, Enum.GetValues<InterpolationType>().Length);
+									
+									linkInterpolationData.accumulation -= difference;
 								}
 							}
 
@@ -280,9 +326,9 @@ namespace Editor.Gui
 				}
 				else
 				{
-					interpolationValue.trackId = string.Empty;
-					interpolationValue.linkId = -1;
-					interpolationValue.accumulation = 0;
+					linkInterpolationData.trackId = string.Empty;
+					linkInterpolationData.linkId = -1;
+					linkInterpolationData.accumulation = 0;
 				}
 
 				ImGui.TreePop();
@@ -327,95 +373,43 @@ namespace Editor.Gui
 			}
 		}
 
-		private static void OnToolbarPressed(string @event, Animator animator)
-		{
-			switch (@event)
-			{
-				case "Forward (Enter)":
-					animator.PlayForward();
-
-					break;
-				case "Backward":
-					animator.PlayBackward();
-
-					break;
-
-				case "First (Home)":
-					animator.CurrentKeyframe = animator.GetFirstFrame();
-
-					if (animator.CurrentKeyframe <= visibleStartingFrame)
-						visibleStartingFrame = animator.CurrentKeyframe;
-					else if (animator.CurrentKeyframe >= visibleEndingFrame)
-						visibleStartingFrame += animator.CurrentKeyframe - visibleEndingFrame + 1;
-
-					break;
-				case "Last (End)":
-					animator.CurrentKeyframe = animator.GetLastFrame();
-
-					if (animator.CurrentKeyframe <= visibleStartingFrame)
-						visibleStartingFrame = animator.CurrentKeyframe;
-					else if (animator.CurrentKeyframe >= visibleEndingFrame)
-						visibleStartingFrame += animator.CurrentKeyframe - visibleEndingFrame + 1;
-
-					break;
-
-				case "Previous":
-					animator.CurrentKeyframe = animator.GetPreviousFrame();
-
-					break;
-
-				case "Next":
-					animator.CurrentKeyframe = animator.GetNextFrame();
-
-					break;
-
-				case "Loop (L)":
-					animator.ToggleLooping();
-
-					break;
-			}
-		}
-
-		private static bool GetToggleButtonCondition(string id, Animator animator)
-		{
-			switch (id)
-			{
-				case "Backward":
-					return animator.PlayingBackward;
-				case "Forward (Enter)":
-					return animator.PlayingForward;
-				default:
-					return animator.Looping;
-			}
-		}
-
-		private static NVector2 DrawToolbar(Animator animator, Action<string, Animator> callback)
+		private static NVector2 DrawToolbarButtons(Animator animator)
 		{
 			ImGui.BeginGroup();
 
+			foreach ((string name, char icon, Predicate<Animator> state, ImGuiKey shortcut, Action<Animator> onPress) in toolbarButtonDefinitions)
 			{
-				for (int index = 0; index < toolbarButtonDefinitions.Length; index++)
-				{
-					(string id, string text) = toolbarButtonDefinitions[index];
+				ToolbarButton(animator, name, icon, state, shortcut, onPress);
 
-					if (index > 0)
-						ImGui.SameLine();
-
-					if (id.Equals("Backward") || id.Equals("Forward (Enter)") || id.Equals("Loop (L)"))
-					{
-						bool toggeld = GetToggleButtonCondition(id, animator);
-
-						if (ToggleButton(text, id, ref toggeld))
-							callback?.Invoke(id, animator);
-					}
-					else
-						DelegateButton(id, text, id, s => callback?.Invoke(s, animator));
-				}
+				ImGui.SameLine();
 			}
 
 			ImGui.EndGroup();
 
 			return ImGui.GetItemRectSize();
+		}
+
+		public static void ToolbarButton(Animator animator, string name, char icon, Predicate<Animator> state, ImGuiKey shortcut, Action<Animator> onPress)
+		{
+			bool isActive = state != null && state.Invoke(animator);
+
+			if (isActive)
+				ImGui.PushStyleColor(ImGuiCol.Button, ImGui.GetColorU32(ImGuiCol.ButtonActive));
+
+			ImGui.SetNextItemShortcut(shortcut, ImGuiInputFlags.RouteOverActive | ImGuiInputFlags.Repeat);
+
+			if (ImGui.Button(icon.ToString(), new NVector2(22, 22)))
+				onPress?.Invoke(animator);
+
+			if (ImGui.BeginItemTooltip())
+			{
+				ImGui.Text(name);
+				ImGui.Text("Shortcut: " + ImGui.GetKeyName(shortcut));
+				ImGui.EndTooltip();
+			}
+
+			if (isActive)
+				ImGui.PopStyleColor();
 		}
 
 		private static void DrawTimeline(Animator animator, bool isSelectedEntityValid, float headerYPadding, float headerHeight = 24f)
@@ -435,19 +429,20 @@ namespace Editor.Gui
 			timelineRegionMax.Y = timelineRegionMin.Y + contentRegion.Y;
 			timelineZoom = Math.Clamp(MathHelper.Lerp(timelineZoom, timelineZoomTarget, 0.1f), 0.1f, 5f);
 			ImGui.PushClipRect(timelineRegionMin, timelineRegionMax, false);
-
 			{
 				ImGui.InvisibleButton("##header-region", headerSize);
 
 				// set frame
-				if (ImGui.IsItemHovered())
+				bool hovered = ImGui.IsItemHovered();
+
+				if (hovered)
 				{
 					int hoveringFrame = GetFrameForTimelinePos((ImGui.GetMousePos().X - timelineRegionMin.X) / timelineZoom);
 					ImGui.BeginTooltip();
 					ImGui.Text(hoveringFrame.ToString());
 					ImGui.EndTooltip();
 
-					if (ImGui.IsMouseDown(0))
+					if (ImGui.IsMouseDown(ImGuiMouseButton.Left))
 					{
 						animator.CurrentKeyframe = hoveringFrame;
 						animator.Stop();
@@ -457,7 +452,7 @@ namespace Editor.Gui
 				// panning the timeline
 				if (ImGui.IsMouseHoveringRect(timelineRegionMin, timelineRegionMax, false))
 				{
-					if (ImGui.IsMouseClicked(ImGuiMouseButton.Left))
+					if (ImGui.IsMouseClicked(ImGuiMouseButton.Left) && !hovered)
 						selectedLink = null;
 
 					if (ImGui.IsMouseDragging(ImGuiMouseButton.Right, 0))
