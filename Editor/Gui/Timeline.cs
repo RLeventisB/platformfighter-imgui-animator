@@ -579,10 +579,10 @@ namespace Editor.Gui
 		{
 			NVector2 cursorPos = ImGui.GetCursorScreenPos();
 			const float keyframeSize = 7f;
-			int halfKeyFrameWidth = (int)Math.Floor(keyframeSize / 2);
+			float halfKeyFrameWidth = keyframeSize / 2;
 
 			// 12 seems to be the offset from start of timelime region, dont know why it happens with columns
-			cursorPos.X += GetTimelinePosForFrame(frame) - (halfKeyFrameWidth + 12);
+			cursorPos.X += GetTimelinePosForFrame(frame)-keyframeSize - halfKeyFrameWidth;
 			cursorPos.Y -= 2;
 
 			NVector2 size = new NVector2(keyframeSize, keyframeSize + 4);
