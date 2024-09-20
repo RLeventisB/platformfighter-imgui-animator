@@ -2,6 +2,7 @@
 global using NVector4 = System.Numerics.Vector4;
 global using Vector2 = Microsoft.Xna.Framework.Vector2;
 global using Vector4 = Microsoft.Xna.Framework.Vector4;
+global using Point = Microsoft.Xna.Framework.Point;
 
 global using static Editor.Gui.ImGuiEx;
 
@@ -27,7 +28,8 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Runtime.InteropServices.Marshalling;
+
+using Vector3 = Microsoft.Xna.Framework.Vector3;
 
 namespace Editor
 {
@@ -55,6 +57,7 @@ namespace Editor
 	public class EditorApplication : Game
 	{
 		public const int SaveFileMagicNumber = 1296649793;
+		public const int HierarchyWindowWidth = 300;
 		public static DragAction currentDragAction;
 
 		public static State State;
@@ -65,13 +68,13 @@ namespace Editor
 		public static Camera Camera;
 
 		private DynamicGrid _grid;
-		private ImGuiRenderer _imguiRenderer;
+		public static ImGuiRenderer ImguiRenderer;
 
 		// view state
 
 		private FilePickerDefinition _openFdDefinition;
 		private PrimitiveBatch _primitiveBatch;
-		public string hoveredentityId = string.Empty;
+		public string hoveredEntityName = string.Empty;
 		private bool nextFrameSave;
 		private MouseState previousMouseState;
 
@@ -143,7 +146,7 @@ namespace Editor
 			InitializeDefaultState(state);
 			selectedEntityId = string.Empty;
 			selectedTextureId = string.Empty;
-			hoveredentityId = string.Empty;
+			hoveredEntityName = string.Empty;
 		}
 
 		private void InitializeDefaultState(State state)
@@ -163,10 +166,10 @@ namespace Editor
 		protected override void LoadContent()
 		{
 			Texture2D singlePixelTexture = new Texture2D(GraphicsDevice, 1, 1);
-			SinglePixel = new TextureFrame(singlePixelTexture, string.Empty, NVector2.One, NVector2.One / 2);
-			_imguiRenderer = new ImGuiRenderer(this);
+			ImguiRenderer = new ImGuiRenderer(this);
+			SinglePixel = new TextureFrame(singlePixelTexture, string.Empty, new Point(1), NVector2.One / 2);
 			IcoMoon.AddIconsToDefaultFont(14f);
-			_imguiRenderer.RebuildFontAtlas();
+			ImguiRenderer.RebuildFontAtlas();
 
 			ImGui.StyleColorsDark();
 			RangeAccessor<NVector4> colors = ImGui.GetStyle().Colors;
@@ -272,19 +275,64 @@ namespace Editor
 			                                   Matrix.CreateTranslation(translation.X, -translation.Y, 0)
 			                                 * Matrix.CreateScale(Camera.Zoom);
 
-			_spriteBatch.Begin(transformMatrix: spriteBatchTransformation, samplerState: SamplerState.PointClamp);
+			ImguiRenderer.BeforeLayout(gameTime);
+			
+			_spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.NonPremultiplied, SamplerState.PointClamp, null, null, null, spriteBatchTransformation);
 
 			DrawEntities();
 
 			_spriteBatch.End();
 
+			ImDrawListPtr drawList = ImGui.GetBackgroundDrawList();
+
+			// Draw viewport overlays
+			if (!string.IsNullOrEmpty(hoveredEntityName))
+				DrawSpriteBounds(hoveredEntityName, Color.CornflowerBlue.PackedValue);
+
+			if (!string.IsNullOrEmpty(selectedEntityId))
+			{
+				DrawSpriteBounds(selectedEntityId, Color.Red.PackedValue);
+				
+				RenderRotateIcon(drawList);
+			}
+
+			if (Timeline.selectedLink != null)
+			{
+				DrawLinkOverlays(drawList);
+			}
+
+			bool popupOpen = true;
+			if(ImGui.BeginPopupModal("EntityContextMenu", ref popupOpen, ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoMove))
+			{
+				ImGui.Text("cuidado");
+				ImGui.EndPopup();
+			}
+			
 			DrawUi(gameTime);
+
+			ImguiRenderer.AfterLayout();
 		}
 
-		private static void DrawEntities()
+		private void DrawEntities()
 		{
 			foreach (TextureEntity entity in State.GraphicEntities.Values)
 			{
+				// ImGui.InvisibleButton(entity.Name, entity.IsBeingHovered(mouseWorld, State.Animator.CurrentKeyframe));
+				if (entity.IsBeingHovered(mouseWorld, State.Animator.CurrentKeyframe))
+				{
+					ImGui.OpenPopup("EntityContextMenu", ImGuiPopupFlags.MouseButtonRight | ImGuiPopupFlags.AnyPopup);
+				}
+
+				// ImGui.BeginItemTooltip();
+				// ImGui.Text(entity.Name); 
+				// ImGui.EndTooltip();
+				
+				
+				Color color = new Color(1f, 1f, 1f, entity.Transparency.CachedValue);
+
+				if (color.A == 0)
+					continue;
+
 				Vector2 position = entity.Position.CachedValue;
 				position.Y = -position.Y;
 
@@ -293,15 +341,15 @@ namespace Editor
 				Vector2 scale = entity.Scale.CachedValue;
 
 				TextureFrame texture = State.GetTexture(entity.TextureId);
-				int framesX = (int)(texture.Width / texture.FrameSize.X);
+				int framesX = texture.Width / texture.FrameSize.X;
 
 				int x = frameIndex % framesX;
 				int y = frameIndex / framesX;
 
-				Rectangle sourceRect = new Rectangle((int)(x * texture.FrameSize.X), (int)(y * texture.FrameSize.Y),
-					(int)texture.FrameSize.X, (int)texture.FrameSize.Y);
+				Rectangle sourceRect = new Rectangle(x * texture.FrameSize.X, y * texture.FrameSize.Y,
+					texture.FrameSize.X, texture.FrameSize.Y);
 
-				_spriteBatch.Draw(texture, position, sourceRect, Color.White,
+				_spriteBatch.Draw(texture, position, sourceRect, color,
 					rotation, new Vector2(texture.Pivot.X, texture.Pivot.Y),
 					scale, SpriteEffects.None, 0f);
 			}
@@ -342,36 +390,14 @@ namespace Editor
 
 		private void DrawUi(GameTime gameTime)
 		{
-			_imguiRenderer.BeforeLayout(gameTime);
-
-			ImDrawListPtr drawList = ImGui.GetBackgroundDrawList();
-
-			// Draw viewport overlays
-			if (!string.IsNullOrEmpty(hoveredentityId))
-				DrawSpriteBounds(hoveredentityId, Color.CornflowerBlue.PackedValue);
-
-			if (!string.IsNullOrEmpty(selectedEntityId))
-			{
-				DrawSpriteBounds(selectedEntityId, Color.Red.PackedValue);
-
-				RenderRotateIcon(drawList);
-			}
-
-			if (Timeline.selectedLink != null)
-			{
-				DrawLinkOverlays(drawList);
-			}
-
-			const int hierarchyWindowWidth = 300;
-
 			ImGui.SetNextWindowPos(new NVector2(0, GraphicsDevice.Viewport.Height - 250), ImGuiCond.Always);
-			ImGui.SetNextWindowSize(NVector2.UnitX * (GraphicsDevice.Viewport.Width - hierarchyWindowWidth) + NVector2.UnitY * GraphicsDevice.Viewport.Height, ImGuiCond.Always);
+			ImGui.SetNextWindowSize(NVector2.UnitX * (GraphicsDevice.Viewport.Width - HierarchyWindowWidth) + NVector2.UnitY * GraphicsDevice.Viewport.Height, ImGuiCond.Always);
 
 			Timeline.DrawUiTimeline(State.Animator);
 
-			ImGui.SetNextWindowPos(new NVector2(GraphicsDevice.Viewport.Width - hierarchyWindowWidth, 0), ImGuiCond.Always);
+			ImGui.SetNextWindowPos(new NVector2(GraphicsDevice.Viewport.Width - HierarchyWindowWidth, 0), ImGuiCond.Always);
 
-			ImGui.SetNextWindowSize(NVector2.UnitX * hierarchyWindowWidth +
+			ImGui.SetNextWindowSize(NVector2.UnitX * HierarchyWindowWidth +
 			                        NVector2.UnitY * GraphicsDevice.Viewport.Height, ImGuiCond.Always);
 
 			ImGui.Begin("Management", ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoResize);
@@ -382,21 +408,13 @@ namespace Editor
 			}
 
 			ImGui.End();
-
-			_imguiRenderer.AfterLayout();
-
-			if (ImGui.IsWindowHovered(ImGuiHoveredFlags.AnyWindow))
-			{
-				ImGui.SetNextFrameWantCaptureKeyboard(true);
-				ImGui.SetNextFrameWantCaptureMouse(true);
-			}
 		}
 
 		private void DrawLinkOverlays(ImDrawListPtr drawList)
 		{
 			switch (Timeline.selectedLink.propertyName)
 			{
-				case PositionProperty when settingsFlags.Get(0): // draw all keyframe 
+				case PositionProperty when settingsFlags.Get(0): // draw all keyframe
 					unsafe
 					{
 						Vector2[] linkPreview = (Vector2[])Timeline.selectedLink.extraData;
@@ -433,7 +451,7 @@ namespace Editor
 					{
 						Keyframe keyframe = Timeline.selectedLink.link.Keyframes[index];
 						float rotation = ((float[])Timeline.selectedLink.extraData)[index];
-						
+
 						Vector2 position = Camera.WorldToScreen((Vector2)keyframe.Value);
 						bool hover = IsInsideRectangle(position, new Vector2(10), ImGui.GetMousePos());
 						RenderRotationIcon(drawList, position, rotation);
@@ -456,6 +474,7 @@ namespace Editor
 					break;
 			}
 		}
+
 		private void RenderRotationIcon(ImDrawListPtr drawList, Vector2 worldPos, float rotation)
 		{
 			Vector2 position = Camera.WorldToScreen(worldPos);
@@ -468,14 +487,14 @@ namespace Editor
 		private void RenderRotateIcon(ImDrawListPtr drawList)
 		{
 			TextureEntity textureEntity = State.GraphicEntities[selectedEntityId];
-			NVector2 textureSize = State.GetTexture(textureEntity.TextureId).FrameSize;
+			Point textureSize = State.GetTexture(textureEntity.TextureId).FrameSize;
 			Vector2 worldPos = textureEntity.Position.CachedValue;
 			Vector2 position = Camera.WorldToScreen(worldPos);
 			Vector2 scale = textureEntity.Scale.CachedValue * Camera.Zoom;
 			float rotation = textureEntity.Rotation.CachedValue;
 			(float sin, float cos) = MathF.SinCos(rotation);
 
-			float length = 16f + textureSize.X / 2 * scale.X;
+			float length = 16f + textureSize.X / 2f * scale.X;
 			position.X += cos * length;
 			position.Y += sin * length;
 			ImFontGlyphPtr glyph = ImGui.GetIO().Fonts.Fonts[0].FindGlyph(IcoMoon.RotateIcon);
@@ -492,7 +511,7 @@ namespace Editor
 			NVector2 uv1 = new NVector2(glyphDataPtr[8], glyphDataPtr[7]);
 			NVector2 uv2 = new NVector2(glyphDataPtr[8], glyphDataPtr[9]);
 			NVector2 uv3 = new NVector2(glyphDataPtr[6], glyphDataPtr[9]);
-			drawList.AddImageQuad(_imguiRenderer.fontTextureId.Value, tl, tr, br, bl, uv0, uv1, uv2, uv3, Color.White.PackedValue);
+			drawList.AddImageQuad(ImguiRenderer.fontTextureId.Value, tl, tr, br, bl, uv0, uv1, uv2, uv3, Color.White.PackedValue);
 		}
 
 		private void DrawUiActions()
@@ -644,8 +663,8 @@ namespace Editor
 					void Checkbox(string text, int index)
 					{
 						bool value = settingsFlags.Get(index);
-						ImGui.Checkbox(text, ref value);
-						settingsFlags.Set(index, value);
+						if (ImGui.Checkbox(text, ref value))
+							settingsFlags.Set(index, value);
 					}
 				}
 
@@ -665,101 +684,31 @@ namespace Editor
 					{
 						ResetEditor(State = new State());
 
+						int counter;
+
 						switch (reader.ReadByte())
 						{
 							default:
 							case 0:
 								State.Animator.FPS = reader.ReadInt32();
-								int count = reader.ReadInt32();
-
-								for (int i = 0; i < count; i++)
-								{
-									reader.ReadString();
-									reader.ReadString();
-								}
-
-								count = reader.ReadInt32();
-								State.Textures.EnsureCapacity(count);
-
-								for (int i = 0; i < count; i++)
-								{
-									string key = reader.ReadString();
-									string path = reader.ReadString();
-									Texture2D texture = Texture2D.FromFile(GraphicsDevice, path);
-
-									State.Textures.Add(key, new TextureFrame(texture, path, reader.ReadNVector2(), reader.ReadNVector2()));
-								}
-
-								count = reader.ReadInt32();
-								State.GraphicEntities.EnsureCapacity(count);
-
-								for (int i = 0; i < count; i++)
-								{
-									string entityId = reader.ReadString();
-									string textureId = reader.ReadString();
-									TextureEntity textureEntity = new TextureEntity(entityId, textureId);
-									State.GraphicEntities.Add(entityId, textureEntity);
-
-									int entityPropertyCount = reader.ReadInt32();
-
-									for (int j = 0; j < entityPropertyCount; j++)
-									{
-										string propertyName = reader.ReadString();
-										int keyframeCount = reader.ReadInt32();
-
-										for (int h = 0; h < keyframeCount; h++)
-										{
-											int frame = reader.ReadInt32();
-											reader.ReadByte();
-
-											switch (propertyName)
-											{
-												case "Position":
-													Vector2 pos = reader.ReadVector2();
-													textureEntity.Position.Add(new Keyframe(textureEntity.Position, frame, pos));
-
-													break;
-												case "FrameIndex":
-													int frameIndex = reader.ReadInt32();
-													textureEntity.FrameIndex.Add(new Keyframe(textureEntity.FrameIndex, frame, frameIndex));
-
-													break;
-												case "Rotation":
-													float rotation = reader.ReadInt32();
-													textureEntity.Rotation.Add(new Keyframe(textureEntity.Rotation, frame, rotation));
-
-													break;
-												case "Scale":
-													Vector2 scale = reader.ReadVector2();
-													textureEntity.Scale.Add(new Keyframe(textureEntity.Scale, frame, scale));
-
-													break;
-											}
-										}
-									}
-								}
-
-								break;
-							case 1:
-								State.Animator.FPS = reader.ReadInt32();
 								State.Animator.CurrentKeyframe = reader.ReadInt32();
 
-								count = reader.ReadInt32();
-								State.Textures.EnsureCapacity(count);
+								counter = reader.ReadInt32();
+								State.Textures.EnsureCapacity(counter);
 
-								for (int i = 0; i < count; i++)
+								for (int i = 0; i < counter; i++)
 								{
 									string key = reader.ReadString();
 									string path = reader.ReadString();
 									Texture2D texture = Texture2D.FromFile(GraphicsDevice, path);
 
-									State.Textures.Add(key, new TextureFrame(texture, path, reader.ReadNVector2(), reader.ReadNVector2()));
+									State.Textures.Add(key, new TextureFrame(texture, path, reader.ReadPoint(), reader.ReadNVector2()));
 								}
 
-								count = reader.ReadInt32();
-								State.GraphicEntities.EnsureCapacity(count);
+								counter = reader.ReadInt32();
+								State.GraphicEntities.EnsureCapacity(counter);
 
-								for (int i = 0; i < count; i++)
+								for (int i = 0; i < counter; i++)
 								{
 									string name = reader.ReadString();
 									string textureId = reader.ReadString();
@@ -770,10 +719,10 @@ namespace Editor
 									State.GraphicEntities.Add(name, entity);
 								}
 
-								count = reader.ReadInt32();
-								State.HitboxEntities.EnsureCapacity(count);
+								counter = reader.ReadInt32();
+								State.HitboxEntities.EnsureCapacity(counter);
 
-								for (int i = 0; i < count; i++)
+								for (int i = 0; i < counter; i++)
 								{
 									string name = reader.ReadString();
 									HitboxEntity entity = new HitboxEntity(name);
@@ -858,7 +807,7 @@ namespace Editor
 				using (BinaryWriter writer = new BinaryWriter(stream))
 				{
 					writer.Write(SaveFileMagicNumber);
-					writer.Write((byte)1);
+					writer.Write((byte)0);
 					writer.Write(State.Animator.FPS);
 					writer.Write(State.Animator.CurrentKeyframe);
 
@@ -952,12 +901,13 @@ namespace Editor
 			{
 				// create entity
 				bool itemHovered = false;
+				ImGui.AlignTextToFramePadding();
 				ImGui.Text($"{IcoMoon.ImagesIcon} Entities");
 				ImGui.SameLine();
 
 				if (State.Textures.Count > 0)
 				{
-					if (ImGui.SmallButton($"{IcoMoon.PlusIcon}##1"))
+					if (ImGui.SmallButton($"{IcoMoon.PlusIcon}##CreateEntity"))
 					{
 						ImGui.OpenPopup("Create entity");
 						DoEntityCreatorReset();
@@ -981,7 +931,7 @@ namespace Editor
 				ImGui.Indent();
 				bool onGrid = !ImGui.GetIO().WantCaptureMouse && !ImGui.GetIO().WantCaptureKeyboard;
 				bool clickedOnGrid = onGrid && ImGui.IsMouseClicked(ImGuiMouseButton.Left);
-				bool hasSelected = false, selectedSame = false;
+				bool hasSelected = false;
 				string oldSelectedEntityId = selectedEntityId;
 
 				if (!string.IsNullOrEmpty(selectedEntityId))
@@ -995,19 +945,17 @@ namespace Editor
 
 						float rotation = textureEntity.Rotation.CachedValue;
 						Vector2 scale = textureEntity.Scale.CachedValue * Camera.Zoom;
-						Vector2 textureSize = State.GetTexture(textureEntity.TextureId).FrameSize;
+						Point textureSize = State.GetTexture(textureEntity.TextureId).FrameSize;
 
 						(float sin, float cos) = MathF.SinCos(rotation);
 
-						rotatePosition.X += cos * (16f + textureSize.X / 2 * scale.X);
-						rotatePosition.Y -= sin * (16f + textureSize.X / 2 * scale.X);
+						rotatePosition.X += cos * (16f + textureSize.X / 2f * scale.X);
+						rotatePosition.Y -= sin * (16f + textureSize.X / 2f * scale.X);
 
 						rotatePosition = Camera.ScreenToWorld(rotatePosition);
 
 						if (onGrid && ImGui.IsMouseClicked(ImGuiMouseButton.Left) && Vector2.DistanceSquared(rotatePosition, mouseWorld) < 64)
 						{
-							selectedSame = true;
-
 							SetDragAction(new DelegateDragAction("RotateWorldObject",
 								delegate
 								{
@@ -1042,8 +990,6 @@ namespace Editor
 									TextureEntity selectedTextureEntity = State.GraphicEntities[selectedEntityId];
 									selectedTextureEntity.Position.SetKeyframeValue(State.Animator.CurrentKeyframe, selectedTextureEntity.Position.CachedValue + mouseWorldDelta);
 								}));
-
-							selectedSame = true;
 						}
 					}
 
@@ -1060,7 +1006,7 @@ namespace Editor
 						continue;
 
 					itemHovered = true;
-					hoveredentityId = entity.Name;
+					hoveredEntityName = entity.Name;
 				}
 
 				if (oldSelectedEntityId != selectedEntityId)
@@ -1071,13 +1017,14 @@ namespace Editor
 				ImGui.Unindent();
 
 				if (!itemHovered)
-					hoveredentityId = string.Empty;
+					hoveredEntityName = string.Empty;
 
 				// Add textures
+				ImGui.AlignTextToFramePadding();
 				ImGui.Text($"{IcoMoon.TextureIcon} Textures");
 				ImGui.SameLine();
 
-				if (ImGui.SmallButton($"{IcoMoon.PlusIcon}##2"))
+				if (ImGui.SmallButton($"{IcoMoon.PlusIcon}##CreateTexture"))
 				{
 					_openFdDefinition = CreateFilePickerDefinition(Assembly.GetExecutingAssembly()
 						.Location, "Open", ".png");
@@ -1095,7 +1042,7 @@ namespace Editor
 						Texture2D texture = Texture2D.FromFile(GraphicsDevice, path);
 
 						State.Textures[key] = new TextureFrame(texture, path,
-							new NVector2(texture.Width, texture.Height),
+							new Point(texture.Width, texture.Height),
 							new NVector2(texture.Width / 2f, texture.Height / 2f));
 
 						selectedTextureId = key;
@@ -1186,8 +1133,8 @@ namespace Editor
 							int frameIndex = ((IntKeyframeValue)keyframeableValue).CachedValue;
 
 							TextureFrame texture = State.GetTexture(selectedTextureEntity.TextureId);
-							int framesX = (int)(texture.Width / texture.FrameSize.X);
-							int framesY = (int)(texture.Height / texture.FrameSize.Y);
+							int framesX = texture.Width / texture.FrameSize.X;
+							int framesY = texture.Height / texture.FrameSize.Y;
 
 							if (ImGui.SliderInt(keyframeableValue.Name, ref frameIndex, 0, framesX * framesY - 1))
 								keyframeableValue.SetKeyframeValue(State.Animator.CurrentKeyframe, frameIndex);
@@ -1196,8 +1143,15 @@ namespace Editor
 						case RotationProperty:
 							float rotation = ((FloatKeyframeValue)keyframeableValue).CachedValue;
 
-							if (ImGui.SliderAngle(keyframeableValue.Name, ref rotation, -360f, 360f, "%.0f deg", ImGuiSliderFlags.NoRoundToFormat))
+							if (ImGui.DragFloat(keyframeableValue.Name, ref rotation, 0.1f, -MathHelper.TwoPi, MathHelper.TwoPi, "%.0f deg", ImGuiSliderFlags.NoRoundToFormat))
 								keyframeableValue.SetKeyframeValue(State.Animator.CurrentKeyframe, rotation);
+
+							break;
+						case TransparencyProperty:
+							float transparency = ((FloatKeyframeValue)keyframeableValue).CachedValue;
+
+							if (ImGui.DragFloat(keyframeableValue.Name, ref transparency, 0.001f, 0, 1f, "%f%", ImGuiSliderFlags.NoRoundToFormat))
+								keyframeableValue.SetKeyframeValue(State.Animator.CurrentKeyframe, transparency);
 
 							break;
 					}
@@ -1214,16 +1168,24 @@ namespace Editor
 			{
 				const float scale = 2f;
 				TextureFrame selectedTexture = State.GetTexture(selectedTextureId);
-				NVector2 currentFrameSize = selectedTexture.FrameSize;
+				Point currentFrameSize = selectedTexture.FrameSize;
 				NVector2 currentPivot = selectedTexture.Pivot;
 
-				ImGui.DragFloat2("Framesize", ref currentFrameSize);
+				unsafe
+				{
+					GCHandle handle = GCHandle.Alloc(currentFrameSize, GCHandleType.Pinned); // why isnt imgui.dragint2 using ref Point as a parameter :(((((((((
+					ImGui.DragScalarN("Framesize", ImGuiDataType.S32, handle.AddrOfPinnedObject(), 2);
+					currentFrameSize.X = ((int*)handle.AddrOfPinnedObject().ToPointer())[0];
+					currentFrameSize.Y = ((int*)handle.AddrOfPinnedObject().ToPointer())[1];
+					handle.Free();
+				}
+
 				ImGui.DragFloat2("Pivot", ref currentPivot);
 
 				selectedTexture.FrameSize = currentFrameSize;
 				selectedTexture.Pivot = currentPivot;
 
-				NVector2 scaledFrameSize = currentFrameSize * scale;
+				NVector2 scaledFrameSize = new NVector2(currentFrameSize.X * scale, currentFrameSize.Y * scale);
 				NVector2 scaledPivot = currentPivot * scale;
 
 				ImGui.BeginChild(2, NVector2.UnitY * 154f, ImGuiChildFlags.FrameStyle);
@@ -1257,7 +1219,7 @@ namespace Editor
 
 		private void RenameEntity(TextureEntity textureEntity, string newName)
 		{
-			// re-add entity
+// re-add entity
 			string oldName = textureEntity.Name;
 			State.GraphicEntities.Remove(oldName);
 			State.GraphicEntities[newName] = textureEntity;
@@ -1273,8 +1235,8 @@ namespace Editor
 
 			selectedEntityId = newName;
 
-			if (!string.IsNullOrEmpty(hoveredentityId))
-				hoveredentityId = newName;
+			if (!string.IsNullOrEmpty(hoveredEntityName))
+				hoveredEntityName = newName;
 
 			if (selectedEntityId == oldName)
 				selectedEntityId = newName;
@@ -1328,7 +1290,7 @@ namespace Editor
 
 			switch (propertyName)
 			{
-				case PositionProperty when EditorApplication.settingsFlags.Get(0):
+				case PositionProperty:
 					List<Vector2> positions = new List<Vector2>();
 
 					AddDelegateOnce(ref EditorApplication.Camera.OnDirty, CalculateExtraData);
@@ -1346,7 +1308,7 @@ namespace Editor
 					extraData = positions.ToArray();
 
 					break;
-				case RotationProperty when EditorApplication.settingsFlags.Get(1):
+				case RotationProperty:
 					List<float> rotations = new List<float>();
 
 					foreach (Keyframe keyframe in link.Keyframes)
@@ -1358,7 +1320,6 @@ namespace Editor
 
 					break;
 			}
-
 		}
 	}
 }

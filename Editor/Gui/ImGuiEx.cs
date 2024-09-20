@@ -1,5 +1,4 @@
-﻿#region
-using ImGuiNET;
+﻿using ImGuiNET;
 
 using Microsoft.Xna.Framework;
 
@@ -8,7 +7,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
-#endregion
+using System.Text;
 
 namespace Editor.Gui
 {
@@ -17,6 +16,7 @@ namespace Editor.Gui
 		public const string ScaleProperty = "Scale";
 		public const string FrameIndexProperty = "Frame Index";
 		public const string RotationProperty = "Rotation";
+		public const string TransparencyProperty = "Transparency";
 		public const string PositionProperty = "Position";
 		public const string SizeXProperty = "Size X";
 		public const string SizeYProperty = "Size Y";
@@ -200,7 +200,7 @@ namespace Editor.Gui
 			valuesList.AddRange(values);
 			valuesList.Add(2 * values[^1] - values[^2]);
 
-			int index = Math.Clamp((int)progress, 0, values.Length - 1) + 1;
+			int index = Math.Clamp((int)progress + 1, 1, valuesList.Count - 3);
 			float localProgress = progress - index + 1;
 
 			return MathHelper.CatmullRom(valuesList[index - 1], valuesList[index], valuesList[index + 1], valuesList[index + 2], localProgress);
@@ -223,7 +223,9 @@ namespace Editor.Gui
 		}
 
 		public static float Modulas(float input, float divisor) => (input % divisor + divisor) % divisor;
+
 		public static int Modulas(int input, int divisor) => (input % divisor + divisor) % divisor;
+
 		public static short Modulas(short input, int divisor) => (short)((input % divisor + divisor) % divisor);
 
 		public static T Log<T>(this T obj)
@@ -271,9 +273,20 @@ namespace Editor.Gui
 			writer.Write(vector2.Y);
 		}
 
+		public static void Write(this BinaryWriter writer, Point point)
+		{
+			writer.Write(point.X);
+			writer.Write(point.Y);
+		}
+
 		public static NVector2 ReadNVector2(this BinaryReader reader)
 		{
 			return new NVector2(reader.ReadSingle(), reader.ReadSingle());
+		}
+
+		public static Point ReadPoint(this BinaryReader reader)
+		{
+			return new Point(reader.ReadInt32(), reader.ReadInt32());
 		}
 
 		public static Vector2 ReadVector2(this BinaryReader reader)
@@ -453,6 +466,20 @@ namespace Editor.Gui
 
 				// NativeMemory.Free(rangesIntPtr);
 			}
+		}
+
+		// this is internal!!! why tho;
+		[DllImport("cimgui", CallingConvention = CallingConvention.Cdecl)]
+		public static unsafe extern byte* igGetKeyChordName(ImGuiKey key);
+
+		public static unsafe string GetKeyChordName(ImGuiKey shortcut)
+		{
+			byte* ptr = igGetKeyChordName(shortcut);
+			int byteCount = 0;
+			while (ptr[byteCount] != 0)
+				++byteCount;
+
+			return Encoding.UTF8.GetString(ptr, byteCount);
 		}
 	}
 }

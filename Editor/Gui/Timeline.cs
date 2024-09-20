@@ -225,7 +225,7 @@ namespace Editor.Gui
 									int difference = (int)(linkInterpolationData.accumulation > 0 ? Math.Floor(linkInterpolationData.accumulation) : Math.Ceiling(linkInterpolationData.accumulation));
 									int newValue = (int)link.InterpolationType + difference;
 									link.InterpolationType = (InterpolationType)Modulas(newValue, Enum.GetValues<InterpolationType>().Length);
-									
+
 									linkInterpolationData.accumulation -= difference;
 								}
 							}
@@ -341,7 +341,7 @@ namespace Editor.Gui
 				if (ImGui.IsMouseHoveringRect(min, max))
 				{
 					ImGui.BeginTooltip();
-					ImGui.Text($"Entity: {selectedEntity}\nFrame: {frame}");
+					ImGui.Text($"Frame: {frame}");
 					ImGui.EndTooltip();
 
 					if (ImGui.IsMouseClicked(ImGuiMouseButton.Left))
@@ -396,7 +396,8 @@ namespace Editor.Gui
 			if (isActive)
 				ImGui.PushStyleColor(ImGuiCol.Button, ImGui.GetColorU32(ImGuiCol.ButtonActive));
 
-			ImGui.SetNextItemShortcut(shortcut, ImGuiInputFlags.RouteOverActive | ImGuiInputFlags.Repeat);
+			if (!ImGui.GetIO().WantCaptureKeyboard)
+				ImGui.SetNextItemShortcut(shortcut, ImGuiInputFlags.RouteGlobal | ImGuiInputFlags.Repeat);
 
 			if (ImGui.Button(icon.ToString(), new NVector2(22, 22)))
 				onPress?.Invoke(animator);
@@ -404,7 +405,7 @@ namespace Editor.Gui
 			if (ImGui.BeginItemTooltip())
 			{
 				ImGui.Text(name);
-				ImGui.Text("Shortcut: " + ImGui.GetKeyName(shortcut));
+				ImGui.Text("Shortcut: " + GetKeyChordName(shortcut));
 				ImGui.EndTooltip();
 			}
 
@@ -582,7 +583,7 @@ namespace Editor.Gui
 			float halfKeyFrameWidth = keyframeSize / 2;
 
 			// 12 seems to be the offset from start of timelime region, dont know why it happens with columns
-			cursorPos.X += GetTimelinePosForFrame(frame)-keyframeSize - halfKeyFrameWidth;
+			cursorPos.X += GetTimelinePosForFrame(frame) - keyframeSize - halfKeyFrameWidth;
 			cursorPos.Y -= 2;
 
 			NVector2 size = new NVector2(keyframeSize, keyframeSize + 4);

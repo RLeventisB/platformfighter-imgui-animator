@@ -113,7 +113,7 @@ namespace Editor
 			Vector2 worldCursorPos = EditorApplication.mouseWorld;
 			Vector2 oldWorldCursorPos = EditorApplication.previousMouseWorld;
 
-			if (!HasStartedMoving && Vector2.DistanceSquared(cursorPos.Log(), StartPos.Log()) > DistanceToStartMoving) // waiting for big movement
+			if (!HasStartedMoving && Vector2.DistanceSquared(cursorPos, StartPos) > DistanceToStartMoving) // waiting for big movement
 			{
 				OnMoveDrag(cursorPos - StartPos, worldCursorPos - StartPosWorld);
 				HasStartedMoving = true;

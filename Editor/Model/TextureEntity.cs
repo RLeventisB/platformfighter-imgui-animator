@@ -11,6 +11,7 @@ namespace Editor.Model
 			Rotation = new FloatKeyframeValue(this, 0, RotationProperty);
 			Name = name;
 			Position = new Vector2KeyframeValue(this, Vector2.Zero, PositionProperty);
+			Transparency = new FloatKeyframeValue(this, 1, TransparencyProperty);
 			TextureId = textureId;
 		}
 
@@ -21,14 +22,15 @@ namespace Editor.Model
 
 		public string Name { get; set; }
 		public Vector2KeyframeValue Position { get; set; }
+		public FloatKeyframeValue Transparency { get; set; }
 
 		public bool IsBeingHovered(Vector2 mouseWorld, int frame)
 		{
-			Vector2 size = EditorApplication.State.GetTexture(TextureId).FrameSize * Scale.Interpolate(frame);
+			Vector2 size = EditorApplication.State.GetTexture(TextureId).FrameSize.ToVector2() * Scale.Interpolate(frame);
 
 			return IsInsideRectangle(Position.Interpolate(frame), size, Rotation.Interpolate(frame), mouseWorld);
 		}
 
-		public List<KeyframeableValue> EnumerateKeyframeableValues() => [Position, Scale, Rotation, FrameIndex];
+		public List<KeyframeableValue> EnumerateKeyframeableValues() => [Position, Scale, Rotation, FrameIndex, Transparency];
 	}
 }

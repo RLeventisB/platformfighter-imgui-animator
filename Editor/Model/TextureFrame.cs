@@ -1,42 +1,44 @@
-﻿using System;
-using Microsoft.Xna.Framework.Graphics;
+﻿using Microsoft.Xna.Framework.Graphics;
+
+using System;
 
 namespace Editor.Model
 {
-    public class TextureFrame : IDisposable
-    {
-        private readonly Texture2D _texture;
+	public class TextureFrame : IDisposable
+	{
+		private readonly Texture2D _texture;
+		private readonly nint _textureId;
+		public string Path { get; set; }
 
-        public string Path { get; set; }
+		public NVector2 Pivot { get; set; }
 
-        public NVector2 Pivot { get; set; }
+		public Point FrameSize { get; set; }
 
-        public NVector2 FrameSize { get; set; }
+		public IntPtr TextureAddress;
 
-        public TextureFrame(Texture2D texture, string path, NVector2 frameSize)
-        : this(texture, path, frameSize, NVector2.Zero)
-        {
-        }
+		public TextureFrame(Texture2D texture, string path, Point framesize, NVector2? pivot = null)
+		{
+			Path = path;
+			FrameSize = framesize;
+			Pivot = pivot ?? NVector2.Zero;
+			_texture = texture;
+			_textureId = EditorApplication.ImguiRenderer.BindTexture(_texture);
+		}
 
-        public TextureFrame(Texture2D texture, string path, NVector2 framesize, NVector2 pivot)
-        {
-            Path = path;
-            FrameSize = framesize;
-            Pivot = pivot;
-            _texture = texture;
-        }
+		public int Width => _texture.Width;
+		public int Height => _texture.Height;
+		public Texture2D Texture => _texture;
+		public nint TextureId => _textureId;
 
-        public int Width => _texture.Width;
-        public int Height => _texture.Height;
+		public static implicit operator Texture2D(TextureFrame f)
+		{
+			return f._texture;
+		}
 
-        public static implicit operator Texture2D(TextureFrame f)
-        {
-            return f._texture;
-        }
-
-        public void Dispose()
-        {
-            _texture?.Dispose();
-        }
-    }
+		public void Dispose()
+		{
+			EditorApplication.ImguiRenderer.UnbindTexture(_textureId);
+			_texture?.Dispose();
+		}
+	}
 }
