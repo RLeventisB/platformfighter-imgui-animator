@@ -23,7 +23,7 @@ namespace Editor
 			ImGui.EndTooltip();
 		}
 
-		private static int GetHoveringFrame() => Timeline.GetFrameForTimelinePos((EditorApplication.mousePos.X - Timeline.timelineRegionMin.X) / Timeline.timelineZoom);
+		private static int GetHoveringFrame() => Timeline.GetFrameForTimelinePos((Input.MousePos.X - Timeline.timelineRegionMin.X) / Timeline.timelineZoom);
 
 		public override void OnRelease()
 		{
@@ -94,8 +94,8 @@ namespace Editor
 			HasStartedMoving = distanceForMove == 0;
 			ActionName = name;
 			CancellableWithEscape = cancellableWithEscape;
-			StartPos = EditorApplication.mousePos;
-			StartPosWorld = EditorApplication.mouseWorld;
+			StartPos = Input.MousePos;
+			StartPosWorld = Input.MouseWorld;
 		}
 
 		public void Update()
@@ -108,10 +108,10 @@ namespace Editor
 				return;
 			}
 
-			Vector2 cursorPos = EditorApplication.mousePos;
-			Vector2 oldCursorPos = EditorApplication.previousMousePos;
-			Vector2 worldCursorPos = EditorApplication.mouseWorld;
-			Vector2 oldWorldCursorPos = EditorApplication.previousMouseWorld;
+			Vector2 cursorPos = Input.MousePos;
+			Vector2 oldCursorPos = Input.PreviousMousePos;
+			Vector2 worldCursorPos = Input.MouseWorld;
+			Vector2 oldWorldCursorPos = Input.PreviousMouseWorld;
 
 			if (!HasStartedMoving && Vector2.DistanceSquared(cursorPos, StartPos) > DistanceToStartMoving) // waiting for big movement
 			{

@@ -5,19 +5,19 @@ using System;
 
 namespace Editor.Graphics
 {
-	public class Camera
+	public static class Camera
 	{
-		private bool _isDirty;
-		private Quaternion _orientation = Quaternion.Identity;
-		private Matrix _projection;
-		private Vector3 _translation = Vector3.Zero;
-		private Matrix _view;
-		public Vector2 lastSize = Vector2.Zero;
-		public Action OnDirty;
-		public float Zoom = 2f;
+		private static bool _isDirty;
+		private static Quaternion _orientation = Quaternion.Identity;
+		private static Matrix _projection;
+		private static Vector3 _translation = Vector3.Zero;
+		private static Matrix _view;
+		public static Vector2 lastSize = Vector2.Zero;
+		public static Action OnDirty;
+		public static float Zoom = 2f;
 
 		public static Viewport viewport => EditorApplication.Instance.GraphicsDevice.Viewport;
-		public Matrix Projection
+		public static Matrix Projection
 		{
 			get
 			{
@@ -33,7 +33,7 @@ namespace Editor.Graphics
 			}
 		}
 
-		public Vector3 Position
+		public static Vector3 Position
 		{
 			get => _translation;
 			set
@@ -43,7 +43,7 @@ namespace Editor.Graphics
 			}
 		}
 
-		public Matrix View
+		public static Matrix View
 		{
 			get
 			{
@@ -58,7 +58,7 @@ namespace Editor.Graphics
 			}
 		}
 
-		public Vector2 ScreenToWorld(Vector2 mousePosition)
+		public static Vector2 ScreenToWorld(Vector2 mousePosition)
 		{
 			Matrix matrix = Matrix.Invert(Matrix.Multiply(Matrix.Multiply(Matrix.Identity, View), Projection));
 			mousePosition.X = (mousePosition.X - viewport.X) / viewport.Width * 2f - 1f;
@@ -78,7 +78,7 @@ namespace Editor.Graphics
 			// return viewport.Unproject(new Vector3(mousePosition, near ? 0 : 1), Projection, View, Matrix.Identity);
 		}
 
-		public Vector2 WorldToScreen(Vector2 worldPosition)
+		public static Vector2 WorldToScreen(Vector2 worldPosition)
 		{
 			Matrix matrix = Matrix.Multiply(Matrix.Multiply(Matrix.Identity, View), Projection);
 			Vector2 result = Vector2.Transform(worldPosition, matrix);
@@ -98,7 +98,7 @@ namespace Editor.Graphics
 			// return viewport.Project(worldPosition, Projection, View, Matrix.Identity);
 		}
 
-		public void Move(Vector3 movement)
+		public static void Move(Vector3 movement)
 		{
 			_translation.X += movement.X;
 			_translation.Y += movement.Y;
@@ -106,13 +106,13 @@ namespace Editor.Graphics
 			_isDirty = true;
 		}
 
-		public void MoveLocal(Vector3 movement)
+		public static void MoveLocal(Vector3 movement)
 		{
 			_translation += Vector3.Transform(movement, _orientation);
 			_isDirty = true;
 		}
 
-		public void Rotate(Vector3 axis, float angle)
+		public static void Rotate(Vector3 axis, float angle)
 		{
 			float radians = MathHelper.ToRadians(angle);
 			_orientation = Quaternion.CreateFromAxisAngle(axis, radians) * _orientation;
@@ -120,7 +120,7 @@ namespace Editor.Graphics
 			_isDirty = true;
 		}
 
-		public void RotateLocal(Vector3 axis, float angle)
+		public static void RotateLocal(Vector3 axis, float angle)
 		{
 			float radians = MathHelper.ToRadians(angle);
 			_orientation *= Quaternion.CreateFromAxisAngle(axis, radians);

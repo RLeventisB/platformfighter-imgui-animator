@@ -221,12 +221,33 @@ namespace Editor.Model
 
 		public void UpdateTimelineInputs()
 		{
-			bool creatingLink = Timeline.newLinkCreationData != null;
-
-			if (!creatingLink)
+			if (Timeline.newLinkCreationData == null)
 				return;
 
-			HandleNewLinkInputs();
+			Stop();
+
+			ImGuiIOPtr io = ImGui.GetIO();
+
+			if (io.KeyCtrl && ImGui.IsKeyPressed(ImGuiKey.LeftArrow) && Timeline.newLinkCreationData.Border > 0)
+			{
+				Timeline.newLinkCreationData.offset--;
+			}
+
+			if (io.KeyCtrl && ImGui.IsKeyPressed(ImGuiKey.RightArrow) && Timeline.newLinkCreationData.Border < Timeline.newLinkCreationData.value.KeyframeCount - 1)
+			{
+				Timeline.newLinkCreationData.offset++;
+			}
+
+			if (ImGui.IsKeyPressed(ImGuiKey.Escape))
+			{
+				Timeline.newLinkCreationData = null;
+			}
+
+			if (Timeline.newLinkCreationData != null && Timeline.newLinkCreationData.Length > 1 && ImGui.IsKeyPressed(ImGuiKey.Enter))
+			{
+				Timeline.newLinkCreationData.CreateLink();
+				Timeline.newLinkCreationData = null;
+			}
 		}
 
 		private void HandleNewLinkInputs()

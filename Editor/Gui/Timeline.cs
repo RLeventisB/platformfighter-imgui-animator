@@ -19,6 +19,7 @@ namespace Editor.Gui
 
 		public const int PixelsPerFrame = 10;
 		public const int MajorLinePerLines = 5;
+		public const int TimelineVerticalPos = 250;
 
 		public static NVector2 timelineRegionMin;
 		public static NVector2 timelineRegionMax;
@@ -99,6 +100,9 @@ namespace Editor.Gui
 
 		public static void DrawUiTimeline(Animator animator)
 		{
+			ImGui.SetNextWindowPos(new NVector2(0, EditorApplication.Graphics.Viewport.Height - TimelineVerticalPos), ImGuiCond.Always);
+			ImGui.SetNextWindowSize(new NVector2(EditorApplication.Graphics.Viewport.Width - Hierarchy.WindowWidth, TimelineVerticalPos), ImGuiCond.Always);
+
 			ImGui.Begin("Timeline", ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoResize);
 
 			ImGui.AlignTextToFramePadding();
@@ -141,7 +145,7 @@ namespace Editor.Gui
 				float oldTimelineZoomTarget = timelineZoomTarget; // im lazy
 				float headerHeightOrsmting = ImGui.GetItemRectSize().Y;
 				float endingFrame = visibleStartingFrame + (visibleEndingFrame - visibleStartingFrame) / timelineZoom;
-				bool isSelectedEntityValid = animator.RegisteredGraphics.TryGetValue(EditorApplication.Instance.selectedEntityId, out TextureEntity selectedEntity);
+				bool isSelectedEntityValid = animator.RegisteredGraphics.TryGetValue(EditorApplication.selectedEntityName, out TextureEntity selectedEntity);
 
 				DrawTimeline(animator, isSelectedEntityValid, style.ItemSpacing.Y, headerHeightOrsmting);
 
