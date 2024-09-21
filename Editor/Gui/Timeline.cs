@@ -31,7 +31,6 @@ namespace Editor.Gui
 		public static int visibleEndingFrame;
 
 		public static float accumalatedPanningDeltaX;
-		public static bool isPanningTimeline;
 
 		private static readonly ToolbarButton[] toolbarButtonDefinitions =
 		[
@@ -87,7 +86,7 @@ namespace Editor.Gui
 				if (v.CurrentKeyframe <= visibleStartingFrame)
 					visibleStartingFrame = v.CurrentKeyframe;
 				else if (v.CurrentKeyframe >= visibleEndingFrame)
-					visibleStartingFrame += v.CurrentKeyframe - visibleEndingFrame + 1;
+					visibleStartingFrame += v.CurrentKeyframe - visibleEndingFrame + 1; // does this need a +=????
 			}),
 			("Loop", IcoMoon.LoopIcon, v => v.Looping, ImGuiKey.L, v =>
 			{
@@ -424,6 +423,7 @@ namespace Editor.Gui
 
 		private static void DrawTimeline(Animator animator, bool isSelectedEntityValid, float headerYPadding, float headerHeight = 24f)
 		{
+			bool isPanningTimeline = false;
 			ImDrawListPtr drawList = ImGui.GetWindowDrawList();
 			ImGuiStylePtr style = ImGui.GetStyle();
 			NVector2 contentRegion = ImGui.GetContentRegionAvail();
@@ -455,7 +455,11 @@ namespace Editor.Gui
 					if (ImGui.IsMouseDown(ImGuiMouseButton.Left))
 					{
 						animator.CurrentKeyframe = hoveringFrame;
-						animator.Stop();
+
+						if (SettingsManager.PlayOnKeyframeSelect)
+							animator.PlayForward();
+						else
+							animator.Stop();
 					}
 				}
 
@@ -467,7 +471,7 @@ namespace Editor.Gui
 
 					if (ImGui.IsMouseDragging(ImGuiMouseButton.Right, 0))
 					{
-						accumalatedPanningDeltaX += ImGui.GetIO().MouseDelta.X;
+						accumalatedPanningDeltaX += Input.MousePosDelta.X;
 
 						// focus window if not panning before
 						if (!ImGui.IsWindowFocused())
@@ -486,7 +490,6 @@ namespace Editor.Gui
 					{
 						timelineZoomTarget += (int)ImGui.GetIO().MouseWheel * 0.3f;
 						timelineZoomTarget = Math.Clamp(timelineZoomTarget, 0, 5);
-						isPanningTimeline = false;
 						accumalatedPanningDeltaX = 0f;
 					}
 				}
@@ -550,8 +553,9 @@ namespace Editor.Gui
 
 				if (newLinkCreationData != null)
 				{
-					DrawLink(newLinkCreationData.LowerBorder, newLinkCreationData.UpperBorder,
-						timelineRegionMin.Y + ImGui.GetStyle().ItemSpacing.Y * newLinkCreationData.value.Owner.EnumerateKeyframeableValues().IndexOf(newLinkCreationData.value),
+					DrawLink(newLinkCreationData.value.keyframes[ newLinkCreationData.LowerBorder].Frame,
+						newLinkCreationData.value.keyframes[ newLinkCreationData.UpperBorder].Frame,
+						3 + 18 * (newLinkCreationData.value.Owner.EnumerateKeyframeableValues().IndexOf(newLinkCreationData.value) + 1),
 						0x66666666, headerHeight, out _, out _);
 
 					ImGui.BeginTooltip();
