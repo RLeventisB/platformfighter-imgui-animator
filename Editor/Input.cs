@@ -6,7 +6,7 @@ namespace Editor
 {
 	public static class Input
 	{
-		public static Vector2 PreviousMousePos, MousePos;
+		public static Vector2 PreviousMousePos, MousePos, MousePosDelta;
 		public static Vector2 PreviousMouseWorld, MouseWorld, MouseWorldDelta;
 		private static MouseState previousMouseState;
 
@@ -20,6 +20,7 @@ namespace Editor
 			MouseWorld = Camera.ScreenToWorld(MousePos);
 
 			MouseWorldDelta = MouseWorld - PreviousMouseWorld;
+			MousePosDelta = MousePos - PreviousMousePos;
 
 			previousMouseState = newMouseState;
 		}
