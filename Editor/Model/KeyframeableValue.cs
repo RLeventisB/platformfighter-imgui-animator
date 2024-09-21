@@ -192,7 +192,7 @@ namespace Editor.Model
 				keyframe.ContainingLink = null;
 			}
 
-			if (Timeline.selectedLink.link == link)
+			if (Timeline.selectedLink != null && Timeline.selectedLink.link == link)
 				Timeline.selectedLink = null;
 
 			links.Remove(link);
@@ -249,7 +249,7 @@ namespace Editor.Model
 			{
 				keyFrameIndex = ~keyFrameIndex - 1;
 
-				if (keyFrameIndex < 0) // this only happens when the frame is positive, in the case of negative frames the first frame is obtained
+				if (keyFrameIndex < 0) // ok pq estaba esto en ingles peor eto pasa cuando el frame es negativo y antes del link creo
 					keyFrameIndex = 0;
 
 				keyframe = keyframeValue.keyframes[keyFrameIndex]; // obtener anterior frame
@@ -449,32 +449,8 @@ namespace Editor.Model
 		public Keyframe SetKeyframeValue(int frame, object data)
 		{
 			Keyframe keyframe = new Keyframe(this, frame, data);
-			int index = Add(keyframe);
-
-			if (index < 0) // keyframe was added
-			{
-				// check if last keyframe has same value
-				int indexBefore = ~index - 1;
-
-				if (indexBefore >= 0 && keyframes[indexBefore].Value == data)
-				{
-					RemoveAt(~index);
-
-					return null;
-				}
-			}
-			else // keyframe replaced old keyframe
-			{
-				// check if last keyframe has same value
-
-				if (index - 1 >= 0 && keyframes[index - 1].Value.Equals(data))
-				{
-					RemoveAt(index);
-
-					return null;
-				}
-			}
-
+			Add(keyframe);
+			
 			InvalidateCachedValue();
 
 			return keyframe;

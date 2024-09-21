@@ -19,7 +19,7 @@ namespace Editor.Gui
 
 		public const int PixelsPerFrame = 10;
 		public const int MajorLinePerLines = 5;
-		public const int TimelineVerticalPos = 250;
+		public const int TimelineVerticalHeight = 250;
 
 		public static NVector2 timelineRegionMin;
 		public static NVector2 timelineRegionMax;
@@ -100,74 +100,76 @@ namespace Editor.Gui
 
 		public static void DrawUiTimeline(Animator animator)
 		{
-			ImGui.SetNextWindowPos(new NVector2(0, EditorApplication.Graphics.Viewport.Height - TimelineVerticalPos), ImGuiCond.Always);
-			ImGui.SetNextWindowSize(new NVector2(EditorApplication.Graphics.Viewport.Width - Hierarchy.WindowWidth, TimelineVerticalPos), ImGuiCond.Always);
+			ImGui.SetNextWindowPos(new NVector2(0, EditorApplication.Graphics.Viewport.Height - TimelineVerticalHeight), ImGuiCond.FirstUseEver);
+			ImGui.SetNextWindowSize(new NVector2(EditorApplication.Graphics.Viewport.Width - Hierarchy.WindowWidth, TimelineVerticalHeight), ImGuiCond.FirstUseEver);
 
-			ImGui.Begin("Timeline", ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoResize);
-
-			ImGui.AlignTextToFramePadding();
-			ImGui.Text("Current:");
-			ImGui.SameLine();
-			ImGui.SetNextItemWidth(48f);
-
-			int ckf = animator.CurrentKeyframe;
-			ImGui.DragInt("##CurrentFrameValue", ref ckf);
-			animator.CurrentKeyframe = ckf;
-
-			ImGui.SameLine();
-			ImGui.Text("FPS:");
-			ImGui.SameLine();
-			ImGui.SetNextItemWidth(48f);
-
-			int fps = animator.FPS;
-			ImGui.DragInt("##FpsValue", ref fps, 1, 1, 40000);
-			animator.FPS = fps;
-
-			ImGui.SameLine();
-			ImGui.Text("Zoom:");
-			ImGui.SameLine();
-			ImGui.SetNextItemWidth(48f);
-
-			// var zoom = timelineZoomTarget;
-			ImGui.DragFloat("##ZoomValue", ref timelineZoomTarget, 0.1f, 0.1f, 5f);
-			timelineZoomTarget = MathHelper.Clamp(timelineZoomTarget, 0.1f, 5f);
-
-			if (ImGui.BeginChild("KeyframeViewer"))
+			ImGui.Begin("Timeline", SettingsManager.ToolsWindowFlags);
 			{
-				ImGuiStylePtr style = ImGui.GetStyle();
-				NVector2 toolbarSize = DrawToolbarButtons(animator);
+				ImGui.AlignTextToFramePadding();
+				ImGui.Text("Current:");
+				ImGui.SameLine();
+				ImGui.SetNextItemWidth(48f);
 
-				currentLegendWidth = (int)(toolbarSize.X >= MinimalLegendWidth ? toolbarSize.X : MinimalLegendWidth);
-				currentLegendWidth += (int)(style.ItemSpacing.Y + style.ItemSpacing.X * 2);
+				int ckf = animator.CurrentKeyframe;
+				ImGui.DragInt("##CurrentFrameValue", ref ckf);
+				animator.CurrentKeyframe = ckf;
 
-				ImGui.SameLine(currentLegendWidth);
+				ImGui.SameLine();
+				ImGui.Text("FPS:");
+				ImGui.SameLine();
+				ImGui.SetNextItemWidth(48f);
 
-				float oldTimelineZoomTarget = timelineZoomTarget; // im lazy
-				float headerHeightOrsmting = ImGui.GetItemRectSize().Y;
-				float endingFrame = visibleStartingFrame + (visibleEndingFrame - visibleStartingFrame) / timelineZoom;
-				bool isSelectedEntityValid = animator.RegisteredGraphics.TryGetValue(EditorApplication.selectedEntityName, out TextureEntity selectedEntity);
+				int fps = animator.FPS;
+				ImGui.DragInt("##FpsValue", ref fps, 1, 1, 40000);
+				animator.FPS = fps;
 
-				DrawTimeline(animator, isSelectedEntityValid, style.ItemSpacing.Y, headerHeightOrsmting);
+				ImGui.SameLine();
+				ImGui.Text("Zoom:");
+				ImGui.SameLine();
+				ImGui.SetNextItemWidth(48f);
 
-				ImGui.BeginChild("##content", NVector2.Zero);
+				// var zoom = timelineZoomTarget;
+				ImGui.DragFloat("##ZoomValue", ref timelineZoomTarget, 0.1f, 0.1f, 5f);
+				timelineZoomTarget = MathHelper.Clamp(timelineZoomTarget, 0.1f, 5f);
 
-				if (isSelectedEntityValid)
+				ImGui.BeginChild("KeyframeViewer");
 				{
-					// small hack to draw first keyframe correctly
-					ImGui.SetCursorPosY(ImGui.GetCursorPos().Y + 4);
+					ImGuiStylePtr style = ImGui.GetStyle();
+					NVector2 toolbarSize = DrawToolbarButtons(animator);
 
-					ImGui.Columns(2, "##legend", false);
-					ImGui.SetColumnWidth(0, currentLegendWidth);
+					currentLegendWidth = (int)(toolbarSize.X >= MinimalLegendWidth ? toolbarSize.X : MinimalLegendWidth);
+					currentLegendWidth += (int)(style.ItemSpacing.Y + style.ItemSpacing.X * 2);
 
-					RenderSelectedEntityKeyframes(selectedEntity, animator, endingFrame, headerHeightOrsmting, oldTimelineZoomTarget);
+					ImGui.SameLine(currentLegendWidth);
+
+					float oldTimelineZoomTarget = timelineZoomTarget; // im lazy
+					float headerHeightOrsmting = ImGui.GetItemRectSize().Y;
+					float endingFrame = visibleStartingFrame + (visibleEndingFrame - visibleStartingFrame) / timelineZoom;
+					bool isSelectedEntityValid = animator.RegisteredGraphics.TryGetValue(EditorApplication.selectedEntityName, out TextureEntity selectedEntity);
+
+					DrawTimeline(animator, isSelectedEntityValid, style.ItemSpacing.Y, headerHeightOrsmting);
+
+					ImGui.BeginChild("##content", NVector2.Zero);
+					{
+						if (isSelectedEntityValid)
+						{
+							// small hack to draw first keyframe correctly
+							ImGui.SetCursorPosY(ImGui.GetCursorPos().Y + 4);
+
+							ImGui.Columns(2, "##legend", false);
+							ImGui.SetColumnWidth(0, currentLegendWidth);
+
+							RenderSelectedEntityKeyframes(selectedEntity, animator, endingFrame, headerHeightOrsmting, oldTimelineZoomTarget);
+						}
+
+						ImGui.EndChild();
+					}
 
 					ImGui.EndChild();
 				}
+
+				ImGui.EndChild();
 			}
-
-			ImGui.EndChild();
-
-			ImGui.End();
 		}
 
 		private static void RenderSelectedEntityKeyframes(TextureEntity selectedEntity, Animator animator, float endingFrame, float headerHeightOrsmting, float oldTimelineZoomTarget)
@@ -380,6 +382,8 @@ namespace Editor.Gui
 		private static NVector2 DrawToolbarButtons(Animator animator)
 		{
 			ImGui.BeginGroup();
+			ImGui.PushStyleVar(ImGuiStyleVar.ButtonTextAlign, NVector2.One / 2);
+			ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, 0);
 
 			foreach ((string name, char icon, Predicate<Animator> state, ImGuiKey shortcut, Action<Animator> onPress) in toolbarButtonDefinitions)
 			{
@@ -388,6 +392,7 @@ namespace Editor.Gui
 				ImGui.SameLine();
 			}
 
+			ImGui.PopStyleVar(2);
 			ImGui.EndGroup();
 
 			return ImGui.GetItemRectSize();
@@ -397,13 +402,13 @@ namespace Editor.Gui
 		{
 			bool isActive = state != null && state.Invoke(animator);
 
-			if (isActive)
+			if (isActive) // yes i know checkboxes are made for this but i want to make things harder for myself :>( 
 				ImGui.PushStyleColor(ImGuiCol.Button, ImGui.GetColorU32(ImGuiCol.ButtonActive));
 
 			if (!ImGui.GetIO().WantCaptureKeyboard)
 				ImGui.SetNextItemShortcut(shortcut, ImGuiInputFlags.RouteGlobal | ImGuiInputFlags.Repeat);
 
-			if (ImGui.Button(icon.ToString(), new NVector2(22, 22)))
+			if (ImGui.Button(icon.ToString(), new NVector2(24, 22)))
 				onPress?.Invoke(animator);
 
 			if (ImGui.BeginItemTooltip())
@@ -616,6 +621,7 @@ namespace Editor.Gui
 
 		public static float GetTimelinePosForFrame(int frame) => (frame - visibleStartingFrame) * PixelsPerFrame * timelineZoom + LineStartOffset;
 	}
+
 	public class CreationLinkData
 	{
 		public readonly int start;

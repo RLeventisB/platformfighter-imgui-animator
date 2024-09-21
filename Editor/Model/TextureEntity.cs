@@ -28,7 +28,7 @@ namespace Editor.Model
 		{
 			Vector2 size = EditorApplication.State.GetTexture(TextureId).FrameSize.ToVector2() * Scale.Interpolate(frame);
 
-			return IsInsideRectangle(Position.Interpolate(frame), size, Rotation.Interpolate(frame), mouseWorld);
+			return IsInsideRectangle(Position.Interpolate(frame), size, -Rotation.Interpolate(frame), mouseWorld);
 		}
 
 		public List<KeyframeableValue> EnumerateKeyframeableValues() => [Position, Scale, Rotation, FrameIndex, Transparency];

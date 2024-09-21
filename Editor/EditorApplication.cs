@@ -20,13 +20,8 @@ using Microsoft.Xna.Framework.Graphics;
 using Rune.MonoGame;
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Reflection;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 
 using Vector3 = Microsoft.Xna.Framework.Vector3;
 
@@ -72,6 +67,7 @@ namespace Editor
 
 		public static string selectedEntityName = string.Empty;
 		public static string selectedTextureName = string.Empty;
+
 		public EditorApplication()
 		{
 			new GraphicsDeviceManager(this)
@@ -171,20 +167,10 @@ namespace Editor
 			ImGuiIOPtr io = ImGui.GetIO();
 
 			Input.Update();
-
+			
 			if (!io.WantTextInput)
 			{
 				State.Animator.UpdateTimelineInputs();
-			}
-
-			bool onGrid = !io.WantCaptureMouse && !io.WantCaptureKeyboard;
-
-			if (onGrid)
-			{
-				if (ImGui.IsMouseDown(ImGuiMouseButton.Right))
-				{
-					Camera.Move(new Vector3(-Input.MouseWorldDelta.X, -Input.MouseWorldDelta.Y, 0));
-				}
 			}
 
 			currentDragAction?.Update();
@@ -217,7 +203,17 @@ namespace Editor
 		{
 			GraphicsDevice.Clear(new Color(32, 32, 32));
 
-			_primitiveBatch.Begin(Camera.View, Camera.Projection);
+			ImguiRenderer.BeforeLayout(gameTime);
+
+			ImGui.SetNextWindowPos(NVector2.Zero);
+			ImGui.SetNextWindowSize(new NVector2(Graphics.Viewport.Width, Graphics.Viewport.Height));
+			ImGui.Begin("idkeverything", ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoBackground | ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoBringToFrontOnFocus);
+
+			// welcome to the worst code flow ever imaginated because i dont want to do double loops or something
+			
+			WorldActions.Draw(); // since this has the camera panning this get called first
+
+			_primitiveBatch.Begin(Camera.View, Camera.Projection); // look!!! two begins!!
 			Grid.Render(_primitiveBatch, Matrix.Identity);
 			_primitiveBatch.End();
 
@@ -227,44 +223,34 @@ namespace Editor
 			                                   Matrix.CreateTranslation(translation.X, -translation.Y, 0)
 			                                 * Matrix.CreateScale(Camera.Zoom);
 
-			ImguiRenderer.BeforeLayout(gameTime);
-
-			_spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.NonPremultiplied, SamplerState.PointClamp, null, null, null, spriteBatchTransformation);
+			_spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.NonPremultiplied, SamplerState.PointClamp, null, null, null, spriteBatchTransformation); // now 3
 
 			DrawEntities();
 
 			_spriteBatch.End();
-			
+
 			ImDrawListPtr drawList = ImGui.GetBackgroundDrawList();
 
 			// Draw viewport overlays
 			if (!string.IsNullOrEmpty(hoveredEntityName))
-				DrawSpriteBounds(drawList, hoveredEntityName, Color.CornflowerBlue.PackedValue);
+				DrawSpriteBounds(drawList, hoveredEntityName, Color.CornflowerBlue.PackedValue); // this could probably be moved to primitivebatch
 
 			if (!string.IsNullOrEmpty(selectedEntityName))
 			{
 				DrawSpriteBounds(drawList, selectedEntityName, Color.Red.PackedValue);
-
-				RenderRotateIcon(drawList);
 			}
 
 			if (Timeline.selectedLink != null)
 			{
 				DrawLinkOverlays(drawList);
 			}
-			
-			ImGui.SetNextWindowPos(NVector2.Zero);
-			ImGui.SetNextWindowSize(new NVector2(Graphics.Viewport.Width, Graphics.Viewport.Height));
-			ImGui.Begin("idkeverything", ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoBackground);
 
-			ContextMenu.Draw();
+			ImGui.End();
 
 			Timeline.DrawUiTimeline(State.Animator);
 
 			Hierarchy.Draw();
 
-			ImGui.End();
-			
 			ImguiRenderer.AfterLayout();
 		}
 
@@ -272,11 +258,6 @@ namespace Editor
 		{
 			foreach (TextureEntity entity in State.GraphicEntities.Values)
 			{
-				if (entity.IsBeingHovered(Input.MouseWorld, State.Animator.CurrentKeyframe) || ImGui.IsMouseReleased(ImGuiMouseButton.Right))
-				{
-					ContextMenu.Select(entity);
-				}
-				
 				Color color = new Color(1f, 1f, 1f, entity.Transparency.CachedValue);
 
 				if (color.A == 0)
@@ -336,18 +317,11 @@ namespace Editor
 			return (tl, tr, bl, br);
 		}
 
-		private void DrawUi()
-		{
-			Timeline.DrawUiTimeline(State.Animator);
-
-			Hierarchy.Draw();
-		}
-
 		private void DrawLinkOverlays(ImDrawListPtr drawList)
 		{
 			switch (Timeline.selectedLink.propertyName)
 			{
-				case PositionProperty when SettingsManager.settingsFlags.Get(0): // draw all keyframe
+				case PositionProperty when SettingsManager.ShowPositionLinks: // draw all keyframe
 					unsafe
 					{
 						Vector2[] linkPreview = (Vector2[])Timeline.selectedLink.extraData;
@@ -379,7 +353,7 @@ namespace Editor
 					}
 
 					break;
-				case RotationProperty when SettingsManager.settingsFlags.Get(1):
+				case RotationProperty when SettingsManager.ShowRotationLinks:
 					for (int index = 0; index < Timeline.selectedLink.link.Keyframes.Count; index++)
 					{
 						Keyframe keyframe = Timeline.selectedLink.link.Keyframes[index];
@@ -417,23 +391,6 @@ namespace Editor
 			RenderIcon(drawList, glyph, position, sin, cos);
 		}
 
-		private void RenderRotateIcon(ImDrawListPtr drawList)
-		{
-			TextureEntity textureEntity = State.GraphicEntities[selectedEntityName];
-			Point textureSize = State.GetTexture(textureEntity.TextureId).FrameSize;
-			Vector2 worldPos = textureEntity.Position.CachedValue;
-			Vector2 position = Camera.WorldToScreen(worldPos);
-			Vector2 scale = textureEntity.Scale.CachedValue * Camera.Zoom;
-			float rotation = textureEntity.Rotation.CachedValue;
-			(float sin, float cos) = MathF.SinCos(rotation);
-
-			float length = 16f + textureSize.X / 2f * scale.X;
-			position.X += cos * length;
-			position.Y += sin * length;
-			ImFontGlyphPtr glyph = ImGui.GetIO().Fonts.Fonts[0].FindGlyph(IcoMoon.RotateIcon);
-			RenderIcon(drawList, glyph, position, sin, cos);
-		}
-
 		private unsafe void RenderIcon(ImDrawListPtr drawList, ImFontGlyphPtr glyph, Vector2 position, float sin, float cos)
 		{
 			float* glyphDataPtr = (float*)glyph.NativePtr; // jaja imgui.net no acepta el commit DE 4 AÑOS que añade bitfields el cual arregla el orden de ImFontGlyph
@@ -446,7 +403,6 @@ namespace Editor
 			NVector2 uv3 = new NVector2(glyphDataPtr[6], glyphDataPtr[9]);
 			drawList.AddImageQuad(ImguiRenderer.fontTextureId.Value, tl, tr, br, bl, uv0, uv1, uv2, uv3, Color.White.PackedValue);
 		}
-		
 
 		public static void RenameEntity(TextureEntity textureEntity, string newName)
 		{
@@ -472,7 +428,7 @@ namespace Editor
 			if (selectedEntityName == oldName)
 				selectedEntityName = newName;
 		}
-		
+
 		public static void SetDragAction(DragAction action)
 		{
 			if (currentDragAction is not null)

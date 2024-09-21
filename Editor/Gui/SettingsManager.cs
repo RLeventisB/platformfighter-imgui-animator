@@ -1,5 +1,7 @@
 ﻿using Editor.Model;
 
+using ImGuiNET;
+
 using Microsoft.Xna.Framework.Graphics;
 
 using System.Collections;
@@ -10,17 +12,35 @@ namespace Editor.Gui
 {
 	public static class SettingsManager
 	{
+		public static ImGuiWindowFlags ToolsWindowFlags => LockToolWindows ? ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoResize : ImGuiWindowFlags.None;
 		public const int SaveFileMagicNumber = 1296649793;
+		public const int AllocatedSettings = 16;
+		public static int ValidSettings { get; private set; }
 		/// <summary>
 		///     0 = Mostrar posiciones adyacentes
 		///     1 = Mostrar rotaciones adyacentes
 		///     2 = Confirmar nuevo proyecto
 		///     3 = Mostrar frame nuevo al mover keyframes
 		///     4 = Reproducir al seleccionar keyframe
+		///     5 = 
 		/// </summary>
-		public static BitArray settingsFlags = new BitArray(12);
+		private static BitArray settingsFlags = new BitArray(AllocatedSettings);
+		public static BoolSetting ShowPositionLinks = new BoolSetting(0, "Mostrar posiciones enlazadas");
+		public static BoolSetting ShowRotationLinks = new BoolSetting(1, "Mostrar rotaciones enlazadas");
+		public static BoolSetting ConfirmOnNewProject = new BoolSetting(2, "Confirmar al darle al boton de nuevo proyecto");
+		public static BoolSetting ShowNewFrameUponMovingKeyframes = new BoolSetting(3, "Mostrar frame nuevo al mover keyframes");
+		public static BoolSetting PlayOnKeyframeSelect = new BoolSetting(4, "Reproducir al seleccionar keyframe");
+		public static BoolSetting LockToolWindows = new BoolSetting(5, "Fijar la posicion y tamaño de las ventanas de herramientas");
+		public static BoolSetting[] Settings =>
+		[
+			ShowPositionLinks,
+			ShowRotationLinks,
+			ConfirmOnNewProject,
+			ShowNewFrameUponMovingKeyframes,
+			PlayOnKeyframeSelect,
+			LockToolWindows
+		];
 
-		
 		public static void LoadProject()
 		{
 			using (FileStream stream = File.OpenRead(Hierarchy.OpenFdDefinition.SelectedRelativePath))
@@ -63,7 +83,7 @@ namespace Editor.Gui
 
 									ReadSavedKeyframes(reader, entity);
 
-									EditorApplication.	State.GraphicEntities.Add(name, entity);
+									EditorApplication.State.GraphicEntities.Add(name, entity);
 								}
 
 								counter = reader.ReadInt32();
@@ -76,13 +96,13 @@ namespace Editor.Gui
 
 									ReadSavedKeyframes(reader, entity);
 
-									EditorApplication.	State.HitboxEntities.Add(name, entity);
+									EditorApplication.State.HitboxEntities.Add(name, entity);
 								}
 
 								break;
 						}
 
-						EditorApplication.	State.Animator.OnKeyframeChanged?.Invoke();
+						EditorApplication.State.Animator.OnKeyframeChanged?.Invoke();
 					}
 				}
 			}
@@ -238,24 +258,36 @@ namespace Editor.Gui
 
 		public static void Initialize()
 		{
-			if (File.Exists("./settings.dat"))
+			settingsFlags = new BitArray(AllocatedSettings);
+
+			ShowPositionLinks.Set(true);
+			ShowRotationLinks.Set(true);
+			ConfirmOnNewProject.Set(true);
+			ShowNewFrameUponMovingKeyframes.Set(true);
+			PlayOnKeyframeSelect.Set(true);
+			LockToolWindows.Set(false);
+
+			if (!File.Exists("./settings.dat"))
+				return;
+
+			using (FileStream fs = File.OpenRead("./settings.dat"))
 			{
-				using (FileStream fs = File.OpenRead("./settings.dat"))
+				for (int i = 0; i < AllocatedSettings; i += 8)
 				{
-					using (BinaryReader reader = new BinaryReader(fs))
+					int data = fs.ReadByte();
+
+					if (data == -1)
+						break;
+
+					for (int j = 0; j < 8; j++)
 					{
-						if (reader.BaseStream.Length >= 2)
-						{
-							settingsFlags = new BitArray(reader.ReadBytes(2));
-						}
+						int bit = 1 << j;
+						settingsFlags.Set(i + j, (data & bit) == bit);
 					}
 				}
 			}
-			else
-			{
-				settingsFlags = new BitArray(new[] { true, true, true, true, false });
-			}
 		}
+
 		public static void SaveSettings()
 		{
 			if (!File.Exists("./settings.dat"))
@@ -276,6 +308,76 @@ namespace Editor.Gui
 					}
 
 					writer.Write(bytes);
+				}
+			}
+		}
+
+		public record BoolSetting
+		{
+			public BoolSetting(int index, string description)
+			{
+				this.index = index;
+				this.description = description;
+				ValidSettings++;
+			}
+
+			public bool Get()
+			{
+				return settingsFlags.Get(index);
+			}
+
+			public void Set(bool value)
+			{
+				settingsFlags.Set(index, value);
+			}
+
+			public static implicit operator bool(BoolSetting setting) => setting.Get();
+
+			public int index { get; init; }
+			public string description { get; init; }
+
+			public void Deconstruct(out int index, out string description)
+			{
+				index = this.index;
+				description = this.description;
+			}
+		}
+
+		public static void DrawSettingsPopup()
+		{
+			bool popupOpen = true;
+
+			if (ImGui.BeginPopupModal("Settings", ref popupOpen, ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoTitleBar))
+			{
+				foreach (BoolSetting setting in Settings)
+				{
+					Checkbox(setting.description, setting.index);
+				}
+
+				ImGui.SetNextItemShortcut(ImGuiKey.Enter, ImGuiInputFlags.Tooltip);
+
+				if (ImGui.Button("OK!"))
+				{
+					SaveSettings();
+
+					ImGui.CloseCurrentPopup();
+				}
+
+				ImGui.SameLine();
+				ImGui.SetNextItemShortcut(ImGuiKey.Escape, ImGuiInputFlags.Tooltip);
+
+				if (ImGui.Button("No >:("))
+				{
+					ImGui.CloseCurrentPopup();
+				}
+
+				ImGui.EndPopup();
+
+				void Checkbox(string text, int index)
+				{
+					bool value = settingsFlags.Get(index);
+					if (ImGui.Checkbox(text, ref value))
+						settingsFlags.Set(index, value);
 				}
 			}
 		}

@@ -1,5 +1,4 @@
-﻿using Editor.Graphics;
-using Editor.Model;
+﻿using Editor.Model;
 
 using ImGuiNET;
 
@@ -22,10 +21,10 @@ namespace Editor.Gui
 
 		public static void Draw()
 		{
-			ImGui.SetNextWindowPos(new NVector2(EditorApplication.Graphics.Viewport.Width - WindowWidth, 0), ImGuiCond.Always);
-			ImGui.SetNextWindowSize(new NVector2(WindowWidth, EditorApplication.Graphics.Viewport.Height), ImGuiCond.Always);
+			ImGui.SetNextWindowPos(new NVector2(EditorApplication.Graphics.Viewport.Width - WindowWidth, 0), ImGuiCond.FirstUseEver);
+			ImGui.SetNextWindowSize(new NVector2(WindowWidth, EditorApplication.Graphics.Viewport.Height), ImGuiCond.FirstUseEver);
 
-			ImGui.Begin("Management", ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoResize);
+			ImGui.Begin("Management", SettingsManager.ToolsWindowFlags);
 			{
 				DrawUiActions();
 				DrawUiHierarchyFrame();
@@ -34,6 +33,7 @@ namespace Editor.Gui
 
 			ImGui.End();
 		}
+
 		private static void DrawUiActions()
 		{
 			NVector2 toolbarSize = NVector2.UnitY * (ImGui.GetTextLineHeightWithSpacing() + ImGui.GetStyle().ItemSpacing.Y * 2);
@@ -49,7 +49,7 @@ namespace Editor.Gui
 
 				if (DelegateButton("New project", $"{IcoMoon.HammerIcon}", "New project"))
 				{
-					if (SettingsManager.settingsFlags[2])
+					if (SettingsManager.ConfirmOnNewProject)
 					{
 						ImGui.OpenPopup("Confirmar nuevo proyecto");
 					}
@@ -65,30 +65,25 @@ namespace Editor.Gui
 
 				if (ImGui.BeginPopupModal("Confirmar nuevo proyecto", ref popupOpen, ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoScrollWithMouse | ImGuiWindowFlags.NoScrollbar))
 				{
-					// if (ImGui.BeginChild(1, new NVector2(400, 120), ImGuiChildFlags.FrameStyle, ImGuiWindowFlags.ChildWindow | ImGuiWindowFlags.NoResize))
+					ImGui.Text("EsTAS seGURO de HACER un NUEVO proYECTO ?\neste menu es horrible");
+
+					if (ImGui.Button("si wn deja de gritar"))
 					{
-						ImGui.Text("EsTAS seGURO de HACER un NUEVO proYECTO ?\neste menu es horrible");
+						EditorApplication.ResetEditor();
+						ImGui.CloseCurrentPopup();
+					}
 
-						if (ImGui.Button("si wn deja de gritar"))
-						{
-							EditorApplication.ResetEditor();
-							ImGui.CloseCurrentPopup();
-						}
+					// ImGui.SameLine();
+					if (ImGui.Button("deja guardar >:("))
+					{
+						ImGui.CloseCurrentPopup();
+						nextFrameSave = true;
+					}
 
-						// ImGui.SameLine();
-						if (ImGui.Button("deja guardar >:("))
-						{
-							ImGui.CloseCurrentPopup();
-							nextFrameSave = true;
-						}
-
-						// ImGui.SameLine();
-						if (ImGui.Button("jaja no"))
-						{
-							ImGui.CloseCurrentPopup();
-						}
-
-						// ImGui.EndChild();
+					// ImGui.SameLine();
+					if (ImGui.Button("jaja no"))
+					{
+						ImGui.CloseCurrentPopup();
 					}
 
 					ImGui.EndPopup();
@@ -133,47 +128,14 @@ namespace Editor.Gui
 					ImGui.OpenPopup("Settings");
 				}
 
-				popupOpen = true;
 				ImGui.SetNextWindowContentSize(NVector2.One * 600);
 
-				if (ImGui.BeginPopupModal("Settings", ref popupOpen, ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoTitleBar))
-				{
-					Checkbox("Mostrar posiciones enlazadas", 0);
-					Checkbox("Mostrar rotaciones enlazadas", 1);
-					Checkbox("Confirmar nuevo proyecto", 2);
-					Checkbox("Mostrar frame nuevo al mover keyframes", 3);
-					Checkbox("Reproducir al seleccionar keyframe", 4);
-
-					ImGui.SetNextItemShortcut(ImGuiKey.Enter, ImGuiInputFlags.Tooltip);
-					if (ImGui.Button("OK!"))
-					{
-						SettingsManager.SaveSettings();
-
-						ImGui.CloseCurrentPopup();
-					}
-
-					ImGui.SameLine();
-
-					if (ImGui.Button("No >:(") || ImGui.IsKeyPressed(ImGuiKey.Escape))
-					{
-						ImGui.CloseCurrentPopup();
-					}
-
-					ImGui.EndPopup();
-
-					void Checkbox(string text, int index)
-					{
-						bool value = SettingsManager.settingsFlags.Get(index);
-						if (ImGui.Checkbox(text, ref value))
-							SettingsManager.settingsFlags.Set(index, value);
-					}
-				}
-
-				ImGui.SameLine();
+				SettingsManager.DrawSettingsPopup();
 			}
 
 			ImGui.EndChild();
 		}
+
 		private static void DrawUiHierarchyFrame()
 		{
 			NVector2 size = ImGui.GetContentRegionAvail();
@@ -218,62 +180,13 @@ namespace Editor.Gui
 				bool hasSelected = false;
 				string oldSelectedEntityId = EditorApplication.selectedEntityName;
 
-				if (!string.IsNullOrEmpty(EditorApplication.selectedEntityName))
-				{
-					TextureEntity textureEntity = EditorApplication.State.GraphicEntities[EditorApplication.selectedEntityName];
-					Vector2 position = textureEntity.Position.CachedValue;
-
-					if (EditorApplication.currentDragAction is not null && EditorApplication.currentDragAction.ActionName != "RotateWorldObject")
-					{
-						Vector2 rotatePosition = Camera.WorldToScreen(position);
-
-						float rotation = textureEntity.Rotation.CachedValue;
-						Vector2 scale = textureEntity.Scale.CachedValue * Camera.Zoom;
-						Point textureSize = EditorApplication.State.GetTexture(textureEntity.TextureId).FrameSize;
-
-						(float sin, float cos) = MathF.SinCos(rotation);
-
-						rotatePosition.X += cos * (16f + textureSize.X / 2f * scale.X);
-						rotatePosition.Y -= sin * (16f + textureSize.X / 2f * scale.X);
-
-						rotatePosition = Camera.ScreenToWorld(rotatePosition);
-
-						if (onGrid && ImGui.IsMouseClicked(ImGuiMouseButton.Left) && Vector2.DistanceSquared(rotatePosition, Input.MouseWorld) < 64)
-						{
-							EditorApplication.SetDragAction(new DelegateDragAction("RotateWorldObject",
-								delegate
-								{
-									Vector2 diff = Input.MouseWorld - position;
-									textureEntity.Rotation.SetKeyframeValue(EditorApplication.State.Animator.CurrentKeyframe, MathF.Atan2(diff.Y, diff.X));
-								}));
-						}
-					}
-				}
-
 				foreach (TextureEntity entity in EditorApplication.State.GraphicEntities.Values)
 				{
 					if (!hasSelected && entity.IsBeingHovered(Input.MouseWorld, EditorApplication.State.Animator.CurrentKeyframe) && clickedOnGrid)
 					{
 						if (EditorApplication.selectedEntityName != entity.Name)
 						{
-							EditorApplication.SetDragAction(new DelegateDragAction("MoveWorldObject",
-								delegate
-								{
-									TextureEntity selectedTextureEntity = EditorApplication.State.GraphicEntities[EditorApplication.selectedEntityName];
-									selectedTextureEntity.Position.SetKeyframeValue(EditorApplication.State.Animator.CurrentKeyframe, selectedTextureEntity.Position.CachedValue + Input.MouseWorldDelta);
-								}));
-
-							EditorApplication.selectedEntityName = entity.Name;
 							hasSelected = true;
-						}
-						else
-						{
-							EditorApplication.SetDragAction(new DelegateDragAction("MoveWorldObject",
-								delegate
-								{
-									TextureEntity selectedTextureEntity = EditorApplication.State.GraphicEntities[EditorApplication.selectedEntityName];
-									selectedTextureEntity.Position.SetKeyframeValue(EditorApplication.State.Animator.CurrentKeyframe, selectedTextureEntity.Position.CachedValue + Input.MouseWorldDelta);
-								}));
 						}
 					}
 
@@ -310,7 +223,7 @@ namespace Editor.Gui
 
 				if (ImGui.SmallButton($"{IcoMoon.PlusIcon}##CreateTexture"))
 				{
-					Hierarchy.OpenFdDefinition = CreateFilePickerDefinition(Assembly.GetExecutingAssembly()
+					OpenFdDefinition = CreateFilePickerDefinition(Assembly.GetExecutingAssembly()
 						.Location, "Open", ".png");
 
 					ImGui.OpenPopup("Load texture");
@@ -341,12 +254,19 @@ namespace Editor.Gui
 					bool selected = EditorApplication.selectedTextureName == texture;
 					ImGui.Selectable(texture, ref selected);
 
-					if (ImGui.IsItemHovered() && ImGui.IsKeyPressed(ImGuiKey.Delete))
+					if (ImGui.BeginPopupContextItem())
 					{
-						EditorApplication.State.Textures.Remove(texture);
-						EditorApplication.selectedTextureName = string.Empty;
+						if (ImGui.Button($"{IcoMoon.MinusIcon} Remove"))
+						{
+							EditorApplication.State.Textures.Remove(texture);
+							if (EditorApplication.selectedTextureName == texture)
+								EditorApplication.selectedTextureName = string.Empty;
+						}
+
+						ImGui.EndPopup();
 					}
-					else if (selected)
+
+					if (selected)
 					{
 						EditorApplication.selectedEntityName = string.Empty;
 						EditorApplication.selectedTextureName = texture;
@@ -426,9 +346,10 @@ namespace Editor.Gui
 							break;
 						case RotationProperty:
 							float rotation = ((FloatKeyframeValue)keyframeableValue).CachedValue;
+							rotation = MathHelper.ToDegrees(rotation);
 
-							if (ImGui.DragFloat(keyframeableValue.Name, ref rotation, 0.1f, -MathHelper.TwoPi, MathHelper.TwoPi, "%.0f deg", ImGuiSliderFlags.NoRoundToFormat))
-								keyframeableValue.SetKeyframeValue(EditorApplication.State.Animator.CurrentKeyframe, rotation);
+							if (ImGui.DragFloat(keyframeableValue.Name, ref rotation, 1f, -360, 360, "%.0f deg", ImGuiSliderFlags.NoRoundToFormat))
+								keyframeableValue.SetKeyframeValue(EditorApplication.State.Animator.CurrentKeyframe, MathHelper.ToRadians(rotation));
 
 							break;
 						case TransparencyProperty:
@@ -500,6 +421,7 @@ namespace Editor.Gui
 
 			ImGui.EndChild();
 		}
+
 		private static void DoPopup(string id, ref FilePickerDefinition fpd, Action onDone)
 		{
 			bool popupOpen = true;
