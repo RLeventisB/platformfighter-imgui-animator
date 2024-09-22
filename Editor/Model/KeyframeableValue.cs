@@ -12,7 +12,7 @@ namespace Editor.Model
 {
 	public class Vector2KeyframeValue : KeyframeableValue
 	{
-		public Vector2KeyframeValue(IEntity entity, Vector2 defaultValue, string name, params string[] tags) : base(entity, defaultValue, name, typeof(Vector2), tags)
+		public Vector2KeyframeValue(TextureEntity entity, Vector2 defaultValue, string name, params string[] tags) : base(entity, defaultValue, name, typeof(Vector2), tags)
 		{
 		}
 
@@ -41,7 +41,7 @@ namespace Editor.Model
 	}
 	public class FloatKeyframeValue : KeyframeableValue
 	{
-		public FloatKeyframeValue(IEntity entity, float defaultValue, string name, params string[] tags) : base(entity, defaultValue, name, typeof(float), tags)
+		public FloatKeyframeValue(TextureEntity entity, float defaultValue, string name, params string[] tags) : base(entity, defaultValue, name, typeof(float), tags)
 		{
 		}
 
@@ -70,7 +70,7 @@ namespace Editor.Model
 	}
 	public class IntKeyframeValue : KeyframeableValue
 	{
-		public IntKeyframeValue(IEntity entity, int defaultValue, string name, params string[] tags) : base(entity, defaultValue, name, typeof(int), tags)
+		public IntKeyframeValue(TextureEntity entity, int defaultValue, string name, params string[] tags) : base(entity, defaultValue, name, typeof(int), tags)
 		{
 		}
 
@@ -119,7 +119,7 @@ namespace Editor.Model
 		public readonly Type type;
 		protected (object value, int frame) cachedValue;
 
-		protected KeyframeableValue(IEntity entity, object defaultValue, string name, Type type, string[] tags)
+		protected KeyframeableValue(TextureEntity entity, object defaultValue, string name, Type type, string[] tags)
 		{
 			DefaultValue = defaultValue;
 			cachedValue = (DefaultValue, -1);
@@ -136,7 +136,7 @@ namespace Editor.Model
 			links = new List<KeyframeLink>();
 		}
 
-		public IEntity Owner { get; init; }
+		public TextureEntity Owner { get; init; }
 		public string Name { get; init; }
 		public ref Keyframe this[int index] => ref CollectionsMarshal.AsSpan(keyframes)[index];
 		public int KeyframeCount => keyframes.Count;
@@ -450,7 +450,7 @@ namespace Editor.Model
 		{
 			Keyframe keyframe = new Keyframe(this, frame, data);
 			Add(keyframe);
-			
+
 			InvalidateCachedValue();
 
 			return keyframe;

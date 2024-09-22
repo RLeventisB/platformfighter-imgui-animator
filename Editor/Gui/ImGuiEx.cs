@@ -23,6 +23,8 @@ namespace Editor.Gui
 
 		private static string savingInputString;
 
+		public static Vector3 AsVector3(this NVector2 vector2) => new Vector3(vector2.X, vector2.Y, 0);
+
 		public static bool IsInsideRectangle(Vector2 position, Vector2 size, float rotation, Vector2 point)
 		{
 			// Translate point to local coordinates of the rectangle
@@ -47,132 +49,21 @@ namespace Editor.Gui
 			return Math.Abs(point.X - position.X) <= size.X / 2 && Math.Abs(point.Y - position.Y) <= size.Y / 2;
 		}
 
-		#region Cubic Hermite Splite implementation that i didnt like
-		// https://en.wikibooks.org/wiki/Cg_Programming/Unity/Hermite_Curves and chatgpt IM SORRY but I cant understand this
-		public static float CubicHermiteInterpolate(float[] points, float t)
+		public static Color MultiplyAlpha(this Color color, float multiplier)
 		{
-			// Ensure at least two points exist for interpolation
-			if (points.Length < 2)
-				throw new ArgumentException("At least two points are required for interpolation.");
+			color.A = (byte)(color.A * multiplier);
 
-			// Calculate tangent vectors
-			float[] tangents = CalculateTangents(points);
-
-			// Calculate segment index and local t
-			float segment = t * (points.Length - 1);
-			int segmentIndex = (int)segment;
-			float localT = segment - segmentIndex;
-
-			// Extrapolate if t is outside the range [0, 1]
-			if (t < 0)
-			{
-				segmentIndex = 0;
-				localT = t * (points.Length - 1);
-			}
-			else if (t >= 1)
-			{
-				segmentIndex = points.Length - 2;
-				localT = t * (points.Length - 1) - segmentIndex;
-			}
-
-			// Hermite basis functions
-			float h1 = 2 * localT * localT * localT - 3 * localT * localT + 1;
-			float h2 = -2 * localT * localT * localT + 3 * localT * localT;
-			float h3 = localT * localT * localT - 2 * localT * localT + localT;
-			float h4 = localT * localT * localT - localT * localT;
-
-			// Interpolate using Hermite spline formula
-			float interpolatedPoint = h1 * points[segmentIndex] +
-			                          h2 * points[segmentIndex + 1] +
-			                          h3 * tangents[segmentIndex] +
-			                          h4 * tangents[segmentIndex + 1];
-
-			return interpolatedPoint;
+			return color;
 		}
 
-		public static float[] CalculateTangents(float[] points)
+		public static Color MultiplyRGB(this Color color, float multiplier)
 		{
-			float[] tangents = new float[points.Length];
+			color.R = (byte)Math.Min(color.R * multiplier, byte.MaxValue);
+			color.G = (byte)Math.Min(color.G * multiplier, byte.MaxValue);
+			color.B = (byte)Math.Min(color.B * multiplier, byte.MaxValue);
 
-			// Calculate tangents based on differences between adjacent points
-			for (int i = 0; i < points.Length; i++)
-			{
-				float tangent = 0f;
-
-				if (i > 0)
-					tangent += points[i] - points[i - 1];
-
-				if (i < points.Length - 1)
-					tangent += points[i + 1] - points[i];
-
-				tangents[i] = tangent;
-			}
-
-			return tangents;
+			return color;
 		}
-
-		public static Vector2 CubicHermiteInterpolate(Vector2[] points, float t)
-		{
-			// Ensure at least two points exist for interpolation
-			if (points.Length < 2)
-				throw new ArgumentException("At least two points are required for interpolation.");
-
-			// Calculate tangent vectors
-			Vector2[] tangents = CalculateTangents(points);
-
-			// Calculate segment index and local t
-			float segment = t * (points.Length - 1);
-			int segmentIndex = (int)segment;
-			float localT = segment - segmentIndex;
-
-			// Extrapolate if t is outside the range [0, 1]
-			if (t < 0)
-			{
-				segmentIndex = 0;
-				localT = t * (points.Length - 1);
-			}
-			else if (t >= 1)
-			{
-				segmentIndex = points.Length - 2;
-				localT = t * (points.Length - 1) - segmentIndex;
-			}
-
-			// Hermite basis functions
-			float h1 = 2 * localT * localT * localT - 3 * localT * localT + 1;
-			float h2 = -2 * localT * localT * localT + 3 * localT * localT;
-			float h3 = localT * localT * localT - 2 * localT * localT + localT;
-			float h4 = localT * localT * localT - localT * localT;
-
-			// Interpolate using Hermite spline formula
-			Vector2 interpolatedPoint = h1 * points[segmentIndex] +
-			                            h2 * points[segmentIndex + 1] +
-			                            h3 * tangents[segmentIndex] +
-			                            h4 * tangents[segmentIndex + 1];
-
-			return interpolatedPoint;
-		}
-
-		public static Vector2[] CalculateTangents(Vector2[] points)
-		{
-			Vector2[] tangents = new Vector2[points.Length];
-
-			// Calculate tangents based on differences between adjacent points
-			for (int i = 0; i < points.Length; i++)
-			{
-				Vector2 tangent = Vector2.Zero;
-
-				if (i > 0)
-					tangent += points[i] - points[i - 1];
-
-				if (i < points.Length - 1)
-					tangent += points[i + 1] - points[i];
-
-				tangents[i] = tangent;
-			}
-
-			return tangents;
-		}
-		#endregion
 
 		public static int InterpolateCatmullRom(int[] values, float progress)
 		{
@@ -381,33 +272,15 @@ namespace Editor.Gui
 		{
 			bool buttonPressed = ImGui.Button(text);
 
-			if (!string.IsNullOrEmpty(descr) && ImGui.IsItemHovered())
+			if (!string.IsNullOrEmpty(descr))
 			{
-				ImGui.BeginTooltip();
-				ImGui.Text(descr);
-				ImGui.EndTooltip();
+				ImGui.SetItemTooltip(descr);
 			}
 
 			if (buttonPressed)
 				callback?.Invoke(id);
 
 			return buttonPressed;
-		}
-
-		public static void DisabledButton(string id)
-		{
-			NVector2 pos = ImGui.GetCursorScreenPos();
-			ImGuiStylePtr style = ImGui.GetStyle();
-			NVector2 textSize = ImGui.CalcTextSize(id);
-			textSize.X += style.FramePadding.X * 2;
-
-			// textSize.Y += style.FramePadding.Y * 2;
-
-			ImGui.GetWindowDrawList()
-				.AddRectFilled(pos, pos + textSize, ImGui.GetColorU32(ImGuiCol.FrameBg));
-
-			ImGui.SetCursorScreenPos(pos + NVector2.UnitX * style.FramePadding.X);
-			ImGui.TextDisabled(id);
 		}
 
 		public static class IcoMoon
@@ -431,6 +304,7 @@ namespace Editor.Gui
 			public const char TextureIcon = '\ueacd';
 			public const char ImageIcon = '\ue90d';
 			public const char ImagesIcon = '\ue90e';
+			public const char TargetIcon = '\ue9b3';
 
 			public const char BranchesIcon = '\ue9bc';
 			public const char ListIcon = '\ue9ba';
@@ -448,7 +322,7 @@ namespace Editor.Gui
 
 			public static unsafe void AddIconsToDefaultFont(float fontSize)
 			{
-				const string fontFilePath = "IcoMoon-Free.ttf";
+				const string fontFilePath = "Content/IcoMoon-Free.ttf";
 				ushort* rangesIntPtr = (ushort*)NativeMemory.AllocZeroed(new nuint(4));
 				rangesIntPtr[0] = '\ue900';
 				rangesIntPtr[1] = '\ueaea';

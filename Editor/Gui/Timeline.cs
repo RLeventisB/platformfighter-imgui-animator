@@ -31,6 +31,7 @@ namespace Editor.Gui
 		public static int visibleEndingFrame;
 
 		public static float accumalatedPanningDeltaX;
+		public static bool HitboxMode;
 
 		private static readonly ToolbarButton[] toolbarButtonDefinitions =
 		[
@@ -144,7 +145,7 @@ namespace Editor.Gui
 					float oldTimelineZoomTarget = timelineZoomTarget; // im lazy
 					float headerHeightOrsmting = ImGui.GetItemRectSize().Y;
 					float endingFrame = visibleStartingFrame + (visibleEndingFrame - visibleStartingFrame) / timelineZoom;
-					bool isSelectedEntityValid = animator.RegisteredGraphics.TryGetValue(EditorApplication.selectedEntityName, out TextureEntity selectedEntity);
+					bool isSelectedEntityValid = EditorApplication.selectedData.GetValue(out object selectedEntity) && EditorApplication.selectedData.ObjectSelectionType is SelectionType.Graphic or SelectionType.Hitbox;
 
 					DrawTimeline(animator, isSelectedEntityValid, style.ItemSpacing.Y, headerHeightOrsmting);
 
@@ -158,7 +159,17 @@ namespace Editor.Gui
 							ImGui.Columns(2, "##legend", false);
 							ImGui.SetColumnWidth(0, currentLegendWidth);
 
-							RenderSelectedEntityKeyframes(selectedEntity, animator, endingFrame, headerHeightOrsmting, oldTimelineZoomTarget);
+							switch (HitboxMode)
+							{
+								case true when EditorApplication.selectedData.ObjectSelectionType == SelectionType.Hitbox:
+									RenderSelectedHitboxData((HitboxEntity)selectedEntity, animator, endingFrame, headerHeightOrsmting, oldTimelineZoomTarget);
+
+									break;
+								case false when EditorApplication.selectedData.ObjectSelectionType == SelectionType.Graphic:
+									RenderSelectedEntityKeyframes((TextureEntity)selectedEntity, animator, endingFrame, headerHeightOrsmting, oldTimelineZoomTarget);
+
+									break;
+							}
 						}
 
 						ImGui.EndChild();
@@ -171,6 +182,11 @@ namespace Editor.Gui
 			}
 		}
 
+		private static void RenderSelectedHitboxData(HitboxEntity selectedEntity, Animator animator, float endingFrame, float headerHeightOrsmting, float oldTimelineZoomTarget)
+		{
+			ImGui.Text("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+		}
+
 		private static void RenderSelectedEntityKeyframes(TextureEntity selectedEntity, Animator animator, float endingFrame, float headerHeightOrsmting, float oldTimelineZoomTarget)
 		{
 			bool open = ImGui.TreeNodeEx(selectedEntity.Name, ImGuiTreeNodeFlags.DefaultOpen);
@@ -180,7 +196,7 @@ namespace Editor.Gui
 			// draw entity keyframes
 			for (int frame = visibleStartingFrame; frame < endingFrame; frame++)
 			{
-				if (animator.RegisteredGraphics.EntityHasKeyframeAtFrame(selectedEntity.Name, frame))
+				if (animator.EntityHasKeyframeAtFrame(selectedEntity.Name, frame))
 				{
 					DrawMainKeyframe(frame);
 				}
@@ -287,7 +303,7 @@ namespace Editor.Gui
 							if ((clickedLeft || ImGui.IsMouseClicked(ImGuiMouseButton.Right)) && ImGui.GetIO().KeyCtrl)
 							{
 								if (newLinkCreationData == null)
-									newLinkCreationData = new CreationLinkData(value, keyframe.Frame, 0);
+									newLinkCreationData = new CreationLinkData(value, i, 0);
 							}
 
 							if (ImGui.IsKeyDown(ImGuiKey.Delete))
@@ -553,8 +569,8 @@ namespace Editor.Gui
 
 				if (newLinkCreationData != null)
 				{
-					DrawLink(newLinkCreationData.value.keyframes[ newLinkCreationData.LowerBorder].Frame,
-						newLinkCreationData.value.keyframes[ newLinkCreationData.UpperBorder].Frame,
+					DrawLink(newLinkCreationData.value.keyframes[newLinkCreationData.LowerBorder].Frame,
+						newLinkCreationData.value.keyframes[newLinkCreationData.UpperBorder].Frame,
 						3 + 18 * (newLinkCreationData.value.Owner.EnumerateKeyframeableValues().IndexOf(newLinkCreationData.value) + 1),
 						0x66666666, headerHeight, out _, out _);
 

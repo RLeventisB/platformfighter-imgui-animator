@@ -21,6 +21,8 @@ using Rune.MonoGame;
 
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Runtime.CompilerServices;
 
 using Vector3 = Microsoft.Xna.Framework.Vector3;
@@ -55,28 +57,47 @@ namespace Editor
 
 		public static State State;
 		public static EditorApplication Instance;
-		private static SpriteBatch _spriteBatch;
+		private static SpriteBatch spriteBatch;
+		public static PrimitiveBatch primitiveBatch;
 
 		public static DynamicGrid Grid;
 		public static ImGuiRenderer ImguiRenderer;
 
 		// view state
 
-		private PrimitiveBatch _primitiveBatch;
 		public static string hoveredEntityName = string.Empty;
 
-		public static string selectedEntityName = string.Empty;
-		public static string selectedTextureName = string.Empty;
+		public static SelectionData selectedData = new SelectionData();
 
 		public EditorApplication()
 		{
+			string[] iniData = File.ReadAllLines("./imgui.ini");
+			int windowDataIndex = iniData.ToList().FindIndex(v => v.Contains("[Window][World View]"));
+			string sizeData;
+
+			if (windowDataIndex != -1 && iniData.Length > windowDataIndex + 2 && (sizeData = iniData[windowDataIndex + 2]).Contains("Size="))
+			{
+				string[] resolutionSize = sizeData.Substring(5).Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+
+				if (resolutionSize.Length == 2 && int.TryParse(resolutionSize[0], out int width) && int.TryParse(resolutionSize[1], out int height))
+				{
+					new GraphicsDeviceManager(this)
+					{
+						IsFullScreen = false,
+						PreferredBackBufferWidth = width,
+						PreferredBackBufferHeight = height
+					};
+
+					goto skipNormalConstructor;
+				}
+			}
+
 			new GraphicsDeviceManager(this)
 			{
-				PreferredBackBufferWidth = 1400,
-				PreferredBackBufferHeight = 768,
 				IsFullScreen = false
 			};
 
+		skipNormalConstructor:
 			Content.RootDirectory = "Content";
 			Window.AllowUserResizing = true;
 			IsFixedTimeStep = true;
@@ -94,7 +115,7 @@ namespace Editor
 				{ GridSizeInPixels = 32 });
 
 			// offset a bit to show origin at correct position
-			Camera.Move((Vector3.UnitX - Vector3.UnitY) * 64);
+			Camera.Move(Vector3.One * 64);
 
 			ResetEditor();
 
@@ -106,8 +127,7 @@ namespace Editor
 			State = new State();
 
 			InitializeDefaultState(State);
-			selectedEntityName = string.Empty;
-			selectedTextureName = string.Empty;
+			selectedData.Empty();
 			hoveredEntityName = string.Empty;
 		}
 
@@ -129,7 +149,7 @@ namespace Editor
 		{
 			Texture2D singlePixelTexture = new Texture2D(GraphicsDevice, 1, 1);
 			ImguiRenderer = new ImGuiRenderer(this);
-			SinglePixel = new TextureFrame(singlePixelTexture, string.Empty, new Point(1), NVector2.One / 2);
+			SinglePixel = new TextureFrame("SinglePixel", singlePixelTexture, string.Empty, new Point(1), null, NVector2.One / 2);
 			IcoMoon.AddIconsToDefaultFont(14f);
 			ImguiRenderer.RebuildFontAtlas();
 
@@ -146,8 +166,8 @@ namespace Editor
 				color.Y /= 1 + b - r;
 			}
 
-			_spriteBatch = new SpriteBatch(GraphicsDevice);
-			_primitiveBatch = new PrimitiveBatch(GraphicsDevice);
+			spriteBatch = new SpriteBatch(GraphicsDevice);
+			primitiveBatch = new PrimitiveBatch(GraphicsDevice);
 
 			base.LoadContent();
 		}
@@ -166,8 +186,9 @@ namespace Editor
 		{
 			ImGuiIOPtr io = ImGui.GetIO();
 
+			io.ConfigFlags |= ImGuiConfigFlags.DockingEnable;
 			Input.Update();
-			
+
 			if (!io.WantTextInput)
 			{
 				State.Animator.UpdateTimelineInputs();
@@ -207,43 +228,45 @@ namespace Editor
 
 			ImGui.SetNextWindowPos(NVector2.Zero);
 			ImGui.SetNextWindowSize(new NVector2(Graphics.Viewport.Width, Graphics.Viewport.Height));
-			ImGui.Begin("idkeverything", ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoBackground | ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoBringToFrontOnFocus);
+			ImGui.Begin("World View", ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoBackground | ImGuiWindowFlags.NoBringToFrontOnFocus);
 
 			// welcome to the worst code flow ever imaginated because i dont want to do double loops or something
-			
+
 			WorldActions.Draw(); // since this has the camera panning this get called first
 
-			_primitiveBatch.Begin(Camera.View, Camera.Projection); // look!!! two begins!!
-			Grid.Render(_primitiveBatch, Matrix.Identity);
-			_primitiveBatch.End();
+			primitiveBatch.Begin(Camera.View, Camera.Projection); // look!!! two begins!!
+			Grid.Render(primitiveBatch, Matrix.Identity);
+			primitiveBatch.End();
 
 			Vector3 translation = Camera.View.Translation;
 
 			Matrix spriteBatchTransformation = Matrix.CreateTranslation(Camera.lastSize.X / 2, Camera.lastSize.Y / 2, 0) *
-			                                   Matrix.CreateTranslation(translation.X, -translation.Y, 0)
+			                                   Matrix.CreateTranslation(translation.X, translation.Y, 0)
 			                                 * Matrix.CreateScale(Camera.Zoom);
 
-			_spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.NonPremultiplied, SamplerState.PointClamp, null, null, null, spriteBatchTransformation); // now 3
-
-			DrawEntities();
-
-			_spriteBatch.End();
+			spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.NonPremultiplied, SamplerState.PointClamp, null, null, null, spriteBatchTransformation); // now 3
 
 			ImDrawListPtr drawList = ImGui.GetBackgroundDrawList();
 
+			DrawEntities();
+
 			// Draw viewport overlays
+			primitiveBatch.Begin(Camera.View, Camera.Projection); // look!!! two begins!!
+
 			if (!string.IsNullOrEmpty(hoveredEntityName))
 				DrawSpriteBounds(drawList, hoveredEntityName, Color.CornflowerBlue.PackedValue); // this could probably be moved to primitivebatch
 
-			if (!string.IsNullOrEmpty(selectedEntityName))
+			if (selectedData.ObjectSelectionType == SelectionType.Graphic)
 			{
-				DrawSpriteBounds(drawList, selectedEntityName, Color.Red.PackedValue);
+				DrawSpriteBounds(drawList, selectedData.Name, Color.Red.PackedValue);
 			}
 
 			if (Timeline.selectedLink != null)
 			{
 				DrawLinkOverlays(drawList);
 			}
+
+			primitiveBatch.End();
 
 			ImGui.End();
 
@@ -256,16 +279,61 @@ namespace Editor
 
 		private void DrawEntities()
 		{
+			if (Timeline.HitboxMode)
+			{
+				DrawGraphicEntities();
+				DrawHitboxEntities();
+			}
+			else
+			{
+				DrawHitboxEntities();
+				DrawGraphicEntities();
+			}
+		}
+
+		private static void DrawHitboxEntities()
+		{
+			primitiveBatch.Begin(Camera.View, Camera.Projection);
+
+			foreach (HitboxEntity entity in State.HitboxEntities.Values.Where(v => v.IsOnFrame(State.Animator.CurrentKeyframe)))
+			{
+				Vector3 center = new Vector3(entity.Position, 0);
+				Vector3 size = new Vector3(entity.Size, 0);
+				primitiveBatch.DrawBox(center, size, entity.GetColor().MultiplyAlpha(0.2f));
+
+				HitboxLine selectedLine = selectedData.IsOf(entity) ? entity.GetSelectedLine(Input.MouseWorld) : HitboxLine.None;
+				Vector3[] points =
+				[
+					new Vector3(entity.Position.X - entity.Size.X / 2, entity.Position.Y - entity.Size.Y / 2, 0),
+					new Vector3(entity.Position.X + entity.Size.X / 2, entity.Position.Y - entity.Size.Y / 2, 0),
+					new Vector3(entity.Position.X + entity.Size.X / 2, entity.Position.Y + entity.Size.Y / 2, 0),
+					new Vector3(entity.Position.X - entity.Size.X / 2, entity.Position.Y + entity.Size.Y / 2, 0)
+				];
+
+				for (int i = 0; i < 4; i++)
+				{
+					primitiveBatch.DrawLine(points[i], points[(i + 1) % 4], (int)selectedLine == i ? Color.Pink : entity.GetColor());
+				}
+			}
+
+			primitiveBatch.End();
+		}
+
+		private static void DrawGraphicEntities()
+		{
 			foreach (TextureEntity entity in State.GraphicEntities.Values)
 			{
 				Color color = new Color(1f, 1f, 1f, entity.Transparency.CachedValue);
+
+				if (Timeline.HitboxMode)
+				{
+					color.A = (byte)(color.A * 0.5f);
+				}
 
 				if (color.A == 0)
 					continue;
 
 				Vector2 position = entity.Position.CachedValue;
-				position.Y = -position.Y;
-
 				int frameIndex = entity.FrameIndex.CachedValue;
 				float rotation = entity.Rotation.CachedValue;
 				Vector2 scale = entity.Scale.CachedValue;
@@ -279,10 +347,12 @@ namespace Editor
 				Rectangle sourceRect = new Rectangle(x * texture.FrameSize.X, y * texture.FrameSize.Y,
 					texture.FrameSize.X, texture.FrameSize.Y);
 
-				_spriteBatch.Draw(texture, position, sourceRect, color,
+				spriteBatch.Draw(texture, position, sourceRect, color,
 					rotation, new Vector2(texture.Pivot.X, texture.Pivot.Y),
 					scale, SpriteEffects.None, 0f);
 			}
+
+			spriteBatch.End();
 		}
 
 		private void DrawSpriteBounds(ImDrawListPtr drawlist, string entityId, uint color)
@@ -420,13 +490,7 @@ namespace Editor
 				}
 			}
 
-			selectedEntityName = newName;
-
-			if (!string.IsNullOrEmpty(hoveredEntityName))
-				hoveredEntityName = newName;
-
-			if (selectedEntityName == oldName)
-				selectedEntityName = newName;
+			selectedData = new SelectionData(textureEntity);
 		}
 
 		public static void SetDragAction(DragAction action)

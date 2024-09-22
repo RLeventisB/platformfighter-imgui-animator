@@ -12,7 +12,7 @@ namespace Editor.Gui
 {
 	public static class SettingsManager
 	{
-		public static ImGuiWindowFlags ToolsWindowFlags => LockToolWindows ? ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoResize : ImGuiWindowFlags.None;
+		public static ImGuiWindowFlags ToolsWindowFlags => LockToolWindows ? ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoDocking : ImGuiWindowFlags.None;
 		public const int SaveFileMagicNumber = 1296649793;
 		public const int AllocatedSettings = 16;
 		public static int ValidSettings { get; private set; }
@@ -69,7 +69,7 @@ namespace Editor.Gui
 									string path = reader.ReadString();
 									Texture2D texture = Texture2D.FromFile(EditorApplication.Graphics, path);
 
-									EditorApplication.State.Textures.Add(key, new TextureFrame(texture, path, reader.ReadPoint(), reader.ReadNVector2()));
+									EditorApplication.State.Textures.Add(key, new TextureFrame(key, texture, path, reader.ReadPoint(), reader.ReadPoint(), reader.ReadNVector2()));
 								}
 
 								counter = reader.ReadInt32();
@@ -93,8 +93,17 @@ namespace Editor.Gui
 								{
 									string name = reader.ReadString();
 									HitboxEntity entity = new HitboxEntity(name);
+									entity.SpawnFrame = reader.ReadInt32();
+									entity.FrameDuration = reader.ReadUInt16();
+									entity.Position = reader.ReadVector2();
+									entity.Size = reader.ReadVector2();
+									int tagCount = reader.ReadInt32();
+									entity.Tags.EnsureCapacity(tagCount);
 
-									ReadSavedKeyframes(reader, entity);
+									for (int j = 0; j < tagCount; j++)
+									{
+										entity.Tags.Add(reader.ReadString());
+									}
 
 									EditorApplication.State.HitboxEntities.Add(name, entity);
 								}
@@ -107,7 +116,7 @@ namespace Editor.Gui
 				}
 			}
 
-			void ReadSavedKeyframes(BinaryReader reader, IEntity entity)
+			void ReadSavedKeyframes(BinaryReader reader, TextureEntity entity)
 			{
 				int propertyCount = reader.ReadInt32();
 				List<KeyframeableValue> values = entity.EnumerateKeyframeableValues();
@@ -185,6 +194,7 @@ namespace Editor.Gui
 						writer.Write(texture.Key);
 						writer.Write(texture.Value.Path);
 						writer.Write(texture.Value.FrameSize);
+						writer.Write(texture.Value.FramePosition);
 						writer.Write(texture.Value.Pivot);
 					}
 
@@ -203,13 +213,21 @@ namespace Editor.Gui
 					foreach (HitboxEntity entity in EditorApplication.State.Animator.RegisteredHitboxes)
 					{
 						writer.Write(entity.Name);
+						writer.Write(entity.SpawnFrame);
+						writer.Write(entity.FrameDuration);
+						writer.Write(entity.Position);
+						writer.Write(entity.Size);
+						writer.Write(entity.Tags.Count);
 
-						SaveEntityKeyframes(entity, writer);
+						foreach (string tag in entity.Tags)
+						{
+							writer.Write(tag);
+						}
 					}
 				}
 			}
 
-			void SaveEntityKeyframes(IEntity entity, BinaryWriter writer)
+			void SaveEntityKeyframes(TextureEntity entity, BinaryWriter writer)
 			{
 				List<KeyframeableValue> values = entity.EnumerateKeyframeableValues();
 				writer.Write(values.Count);
@@ -345,16 +363,30 @@ namespace Editor.Gui
 
 		public static void DrawSettingsPopup()
 		{
+			ImGui.SetNextWindowContentSize(NVector2.One * 600);
+
 			bool popupOpen = true;
 
-			if (ImGui.BeginPopupModal("Settings", ref popupOpen, ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoTitleBar))
+			if (ImGui.BeginPopupModal("Settings", ref popupOpen, ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse | ImGuiWindowFlags.NoDocking))
 			{
 				foreach (BoolSetting setting in Settings)
 				{
 					Checkbox(setting.description, setting.index);
 				}
 
-				ImGui.SetNextItemShortcut(ImGuiKey.Enter, ImGuiInputFlags.Tooltip);
+				if (ImGui.Button("Reiniciar posicion de las herramientas"))
+				{
+					ImGui.SetWindowPos("Timeline", new NVector2(0, EditorApplication.Graphics.Viewport.Height - Timeline.TimelineVerticalHeight));
+					ImGui.SetWindowSize("Timeline", new NVector2(EditorApplication.Graphics.Viewport.Width - Hierarchy.WindowWidth, Timeline.TimelineVerticalHeight));
+					ImGui.SetWindowPos("Management", new NVector2(EditorApplication.Graphics.Viewport.Width - Hierarchy.WindowWidth, 0));
+					ImGui.SetWindowSize("Management", new NVector2(Hierarchy.WindowWidth, EditorApplication.Graphics.Viewport.Height));
+					ImGui.CloseCurrentPopup();
+
+					return;
+				}
+
+				ImGui.SetCursorPosY(600 - ImGui.GetStyle().DisplayWindowPadding.Y);
+				ImGui.SetNextItemShortcut(ImGuiKey.Enter);
 
 				if (ImGui.Button("OK!"))
 				{
@@ -363,13 +395,19 @@ namespace Editor.Gui
 					ImGui.CloseCurrentPopup();
 				}
 
+				ImGui.SetItemTooltip("Guarda los cambios hechos en los ajustes.\nShortcut: " + ImGui.GetKeyName(ImGuiKey.Enter));
+
 				ImGui.SameLine();
-				ImGui.SetNextItemShortcut(ImGuiKey.Escape, ImGuiInputFlags.Tooltip);
+				ImGui.SetNextItemShortcut(ImGuiKey.Escape);
 
 				if (ImGui.Button("No >:("))
 				{
+					Initialize();
+
 					ImGui.CloseCurrentPopup();
 				}
+
+				ImGui.SetItemTooltip("Cancela los cambios en los ajustes.\nShortcut: " + ImGui.GetKeyName(ImGuiKey.Escape));
 
 				ImGui.EndPopup();
 

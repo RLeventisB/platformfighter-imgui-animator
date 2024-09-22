@@ -13,6 +13,9 @@
 
 #---------------------------------- Content ---------------------------------#
 
+#begin ../../Raw/IcoMoon-Free.ttf
+/copy:../../Raw/IcoMoon-Free.ttf;IcoMoon-Free.ttf
+
 #begin Arial.spritefont
 /importer:FontDescriptionImporter
 /processor:FontDescriptionProcessor

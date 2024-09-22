@@ -3,8 +3,60 @@ using Editor.Model;
 
 using ImGuiNET;
 
+using System;
+
 namespace Editor
 {
+	public class HitboxMoveSizeDragAction : DragAction
+	{
+		public HitboxLine SelectedLine { get; }
+		public HitboxEntity HitboxEntityReference { get; }
+		public readonly Vector2 OldPosition, OldSize;
+
+		public HitboxMoveSizeDragAction(HitboxLine selectedLine, HitboxEntity hitboxEntity) : base("ResizeHitboxObject", 1, true)
+		{
+			SelectedLine = selectedLine;
+			HitboxEntityReference = hitboxEntity;
+			OldPosition = hitboxEntity.Position;
+			OldSize = hitboxEntity.Size;
+			EditorApplication.selectedData = new SelectionData(HitboxEntityReference); // just in case you click out of the box
+		}
+
+		public override void OnMoveDrag(Vector2 worldDifference, Vector2 screenDifference)
+		{
+			Vector2 topLeft = HitboxEntityReference.Position - HitboxEntityReference.Size / 2;
+			Vector2 bottomRight = HitboxEntityReference.Position + HitboxEntityReference.Size / 2;
+
+			switch (SelectedLine)
+			{
+				case HitboxLine.Top:
+					topLeft.Y = Math.Min(Input.MouseWorld.Y, bottomRight.Y);
+
+					break;
+				case HitboxLine.Right:
+					bottomRight.X = Math.Max(Input.MouseWorld.X, topLeft.X);
+
+					break;
+				case HitboxLine.Bottom:
+					bottomRight.Y = Math.Max(Input.MouseWorld.Y, topLeft.Y);
+
+					break;
+				case HitboxLine.Left:
+					topLeft.X = Math.Min(Input.MouseWorld.X, bottomRight.X);
+
+					break;
+			}
+
+			HitboxEntityReference.Size = bottomRight - topLeft;
+			HitboxEntityReference.Position = topLeft + HitboxEntityReference.Size / 2;
+		}
+
+		public override void OnCancel()
+		{
+			HitboxEntityReference.Position = OldPosition;
+			HitboxEntityReference.Size = OldSize;
+		}
+	}
 	public class MoveKeyframeDelegateAction : DragAction
 	{
 		private readonly (KeyframeableValue value, int index)[] _dataPairs;

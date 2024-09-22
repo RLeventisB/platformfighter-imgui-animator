@@ -36,10 +36,11 @@ namespace Editor.Gui
 
 		private static void DrawUiActions()
 		{
-			NVector2 toolbarSize = NVector2.UnitY * (ImGui.GetTextLineHeightWithSpacing() + ImGui.GetStyle().ItemSpacing.Y * 2);
-			ImGui.Text($"{IcoMoon.HammerIcon} Actions");
-			ImGui.BeginChild(1, toolbarSize, ImGuiChildFlags.FrameStyle);
+			NVector2 toolbarSize = NVector2.UnitY * (ImGui.GetTextLineHeightWithSpacing() * 2 + ImGui.GetStyle().ItemSpacing.Y * 2);
+			ImGui.BeginChild("Management actions", toolbarSize, ImGuiChildFlags.FrameStyle | ImGuiChildFlags.AutoResizeY);
 			{
+				ImGui.Text($"{IcoMoon.HammerIcon} Actions");
+
 				if (nextFrameSave)
 				{
 					OpenFdDefinition = CreateFilePickerDefinition(Assembly.GetExecutingAssembly().Location, "Save", ".anim");
@@ -47,7 +48,7 @@ namespace Editor.Gui
 					nextFrameSave = false;
 				}
 
-				if (DelegateButton("New project", $"{IcoMoon.HammerIcon}", "New project"))
+				if (ImGui.Button($"{IcoMoon.HammerIcon}##New project"))
 				{
 					if (SettingsManager.ConfirmOnNewProject)
 					{
@@ -60,12 +61,15 @@ namespace Editor.Gui
 					}
 				}
 
+				ImGui.SetItemTooltip("Nuevo proyecto");
+
 				bool popupOpen = true;
-				ImGui.SetNextWindowSize(new NVector2(400, 140));
+				ImGui.SetNextWindowSize(new NVector2(500, 200));
 
 				if (ImGui.BeginPopupModal("Confirmar nuevo proyecto", ref popupOpen, ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoScrollWithMouse | ImGuiWindowFlags.NoScrollbar))
 				{
 					ImGui.Text("EsTAS seGURO de HACER un NUEVO proYECTO ?\neste menu es horrible");
+					ImGui.SetCursorPosY(200 - ImGui.GetTextLineHeight() - ImGui.GetStyle().IndentSpacing);
 
 					if (ImGui.Button("si wn deja de gritar"))
 					{
@@ -73,14 +77,16 @@ namespace Editor.Gui
 						ImGui.CloseCurrentPopup();
 					}
 
-					// ImGui.SameLine();
+					ImGui.SameLine();
+
 					if (ImGui.Button("deja guardar >:("))
 					{
 						ImGui.CloseCurrentPopup();
 						nextFrameSave = true;
 					}
 
-					// ImGui.SameLine();
+					ImGui.SameLine();
+
 					if (ImGui.Button("jaja no"))
 					{
 						ImGui.CloseCurrentPopup();
@@ -91,7 +97,7 @@ namespace Editor.Gui
 
 				ImGui.SameLine();
 
-				if (DelegateButton("Save project", $"{IcoMoon.FloppyDiskIcon}", "Save project"))
+				if (DelegateButton("Save project", $"{IcoMoon.FloppyDiskIcon}", "Guardar proyecto"))
 				{
 					OpenFdDefinition = CreateFilePickerDefinition(Assembly.GetExecutingAssembly()
 						.Location, "Save", ".anim");
@@ -111,7 +117,7 @@ namespace Editor.Gui
 
 				ImGui.SameLine();
 
-				if (DelegateButton("Open project", $"{IcoMoon.FolderOpenIcon}", "Open project"))
+				if (DelegateButton("Open project", $"{IcoMoon.FolderOpenIcon}", "Abrir proyecto"))
 				{
 					OpenFdDefinition = CreateFilePickerDefinition(Assembly.GetExecutingAssembly()
 						.Location, "Open", ".anim");
@@ -128,9 +134,17 @@ namespace Editor.Gui
 					ImGui.OpenPopup("Settings");
 				}
 
-				ImGui.SetNextWindowContentSize(NVector2.One * 600);
-
 				SettingsManager.DrawSettingsPopup();
+
+				ImGui.SameLine();
+
+				if (ImGui.Checkbox("##Hitbox viewer mode", ref Timeline.HitboxMode))
+				{
+					if (EditorApplication.selectedData.ObjectSelectionType is SelectionType.Graphic or SelectionType.Hitbox)
+						EditorApplication.selectedData.Empty();
+				}
+
+				ImGui.SetItemTooltip("Cambiar a editor de hitboxes");
 			}
 
 			ImGui.EndChild();
@@ -142,27 +156,25 @@ namespace Editor.Gui
 			NVector2 itemSpacing = ImGui.GetStyle().ItemSpacing + NVector2.UnitY * 8;
 			ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, itemSpacing);
 
-			ImGui.Text($"{IcoMoon.ListIcon} Hierarchy");
-			ImGui.BeginChild(2, size - NVector2.UnitY * 256, ImGuiChildFlags.FrameStyle);
+			ImGui.BeginChild("Project objects", size - NVector2.UnitY * 600, ImGuiChildFlags.FrameStyle);
 			{
+				ImGui.Text($"{IcoMoon.ListIcon} Hierarchy");
+
 				// create entity
 				bool itemHovered = false;
 				ImGui.AlignTextToFramePadding();
 				ImGui.Text($"{IcoMoon.ImagesIcon} Entities");
 				ImGui.SameLine();
 
-				if (EditorApplication.State.Textures.Count > 0)
+				ImGui.BeginDisabled(EditorApplication.State.Textures.Count == 0);
+
+				if (ImGui.SmallButton($"{IcoMoon.PlusIcon}##CreateEntity"))
 				{
-					if (ImGui.SmallButton($"{IcoMoon.PlusIcon}##CreateEntity"))
-					{
-						ImGui.OpenPopup("Create entity");
-						DoEntityCreatorReset();
-					}
+					ImGui.OpenPopup("Create entity");
+					DoEntityCreatorReset();
 				}
-				else
-				{
-					DisabledButton($"{IcoMoon.PlusIcon}");
-				}
+
+				ImGui.EndDisabled();
 
 				DoEntityCreatorModal(EditorApplication.State.Textures.Keys.ToArray(), (name, selectedTexture) =>
 				{
@@ -170,33 +182,35 @@ namespace Editor.Gui
 
 					EditorApplication.State.GraphicEntities[name] = textureEntity;
 
-					EditorApplication.selectedEntityName = name;
+					EditorApplication.selectedData = new SelectionData(textureEntity);
 				});
 
 				// show all created entities
 				ImGui.Indent();
-				bool onGrid = !ImGui.GetIO().WantCaptureMouse && !ImGui.GetIO().WantCaptureKeyboard;
-				bool clickedOnGrid = onGrid && ImGui.IsMouseClicked(ImGuiMouseButton.Left);
-				bool hasSelected = false;
-				string oldSelectedEntityId = EditorApplication.selectedEntityName;
+				bool changedSelectedObject = false;
 
 				foreach (TextureEntity entity in EditorApplication.State.GraphicEntities.Values)
 				{
-					if (!hasSelected && entity.IsBeingHovered(Input.MouseWorld, EditorApplication.State.Animator.CurrentKeyframe) && clickedOnGrid)
+					bool selected = EditorApplication.selectedData.IsOf(entity);
+
+					if (ImGui.Selectable(entity.Name, ref selected) && selected)
 					{
-						if (EditorApplication.selectedEntityName != entity.Name)
-						{
-							hasSelected = true;
-						}
+						changedSelectedObject = EditorApplication.selectedData.IsNotButSameType(entity);
+						EditorApplication.selectedData = new SelectionData(entity);
 					}
 
-					bool selected = EditorApplication.selectedEntityName == entity.Name;
-					ImGui.Selectable(entity.Name, ref selected);
-
-					if (selected)
+					if (ImGui.BeginPopupContextItem())
 					{
-						EditorApplication.selectedTextureName = string.Empty;
-						EditorApplication.selectedEntityName = entity.Name;
+						if (ImGui.Button($"{IcoMoon.MinusIcon} Remove"))
+						{
+							EditorApplication.State.GraphicEntities.Remove(entity.Name);
+							if (EditorApplication.selectedData.IsOf(entity))
+								EditorApplication.selectedData.Empty();
+
+							continue;
+						}
+
+						ImGui.EndPopup();
 					}
 
 					if (!ImGui.IsItemHovered())
@@ -206,7 +220,90 @@ namespace Editor.Gui
 					EditorApplication.hoveredEntityName = entity.Name;
 				}
 
-				if (oldSelectedEntityId != EditorApplication.selectedEntityName)
+				if (changedSelectedObject)
+				{
+					ResetSavedInput();
+				}
+
+				ImGui.Unindent();
+
+				if (!itemHovered)
+					EditorApplication.hoveredEntityName = string.Empty;
+
+				// hitboxes!!!
+				ImGui.AlignTextToFramePadding();
+				ImGui.Text($"{IcoMoon.TargetIcon} Hitboxes");
+				ImGui.SameLine();
+
+				if (ImGui.SmallButton($"{IcoMoon.PlusIcon}##CreateHitbox"))
+				{
+					entityName = "Hitbox " + EditorApplication.State.Animator.RegisteredHitboxes.registry.Count;
+					ImGui.OpenPopup("Create hitbox entity");
+				}
+
+				ImGui.SetNextWindowSize(new NVector2(350, 100), ImGuiCond.Always);
+
+				if (ImGui.BeginPopupModal("Create hitbox entity"))
+				{
+					ImGui.InputText("Hitbox name", ref entityName, 64);
+
+					if (ImGui.Button("Create hitbox"))
+					{
+						HitboxEntity hitboxEntity = new HitboxEntity(entityName);
+
+						EditorApplication.State.HitboxEntities[entityName] = hitboxEntity;
+
+						EditorApplication.selectedData = new SelectionData(hitboxEntity);
+
+						ImGui.CloseCurrentPopup();
+					}
+
+					ImGui.SameLine();
+
+					if (ImGui.Button("Cancel"))
+					{
+						ImGui.CloseCurrentPopup();
+					}
+
+					ImGui.EndPopup();
+				}
+
+				// show all created ~~entities~~ NUH UH hitboxes
+				ImGui.Indent();
+
+				changedSelectedObject = false;
+
+				foreach (HitboxEntity entity in EditorApplication.State.HitboxEntities.Values)
+				{
+					bool selected = EditorApplication.selectedData.IsOf(entity);
+
+					if (ImGui.Selectable(entity.Name, ref selected) && selected)
+					{
+						changedSelectedObject = EditorApplication.selectedData.IsNotButSameType(entity);
+						EditorApplication.selectedData = new SelectionData(entity);
+					}
+
+					if (ImGui.BeginPopupContextItem())
+					{
+						if (ImGui.Button($"{IcoMoon.MinusIcon} Remove"))
+						{
+							EditorApplication.State.HitboxEntities.Remove(entity.Name);
+							if (EditorApplication.selectedData.IsOf(entity))
+								EditorApplication.selectedData.Empty();
+
+							continue;
+						}
+
+						ImGui.EndPopup();
+					}
+
+					if (!ImGui.IsItemHovered())
+						continue;
+
+					itemHovered = true;
+				}
+
+				if (changedSelectedObject)
 				{
 					ResetSavedInput();
 				}
@@ -223,8 +320,7 @@ namespace Editor.Gui
 
 				if (ImGui.SmallButton($"{IcoMoon.PlusIcon}##CreateTexture"))
 				{
-					OpenFdDefinition = CreateFilePickerDefinition(Assembly.GetExecutingAssembly()
-						.Location, "Open", ".png");
+					OpenFdDefinition = CreateFilePickerDefinition(Assembly.GetExecutingAssembly().Location, "Open", ".png");
 
 					ImGui.OpenPopup("Load texture");
 				}
@@ -233,43 +329,44 @@ namespace Editor.Gui
 				{
 					string key = Path.GetFileNameWithoutExtension(OpenFdDefinition.SelectedFileName);
 
-					if (!EditorApplication.State.Textures.ContainsKey(key))
-					{
-						string path = OpenFdDefinition.SelectedRelativePath;
-						Texture2D texture = Texture2D.FromFile(EditorApplication.Graphics, path);
+					if (EditorApplication.State.Textures.ContainsKey(key))
+						return;
 
-						EditorApplication.State.Textures[key] = new TextureFrame(texture, path,
-							new Point(texture.Width, texture.Height),
-							new NVector2(texture.Width / 2f, texture.Height / 2f));
+					string path = OpenFdDefinition.SelectedRelativePath;
+					Texture2D texture = Texture2D.FromFile(EditorApplication.Graphics, path);
 
-						EditorApplication.selectedTextureName = key;
-					}
+					TextureFrame frame = new TextureFrame(key, texture, path,
+						new Point(texture.Width, texture.Height),
+						null,
+						new NVector2(texture.Width / 2f, texture.Height / 2f));
+
+					EditorApplication.State.Textures[key] = frame;
+
+					EditorApplication.selectedData = new SelectionData(frame);
 				});
 
 				// show all loaded textures
 				ImGui.Indent();
 
-				foreach (string texture in EditorApplication.State.Textures.Keys)
+				foreach (TextureFrame texture in EditorApplication.State.Textures.Values)
 				{
-					bool selected = EditorApplication.selectedTextureName == texture;
-					ImGui.Selectable(texture, ref selected);
+					bool selected = EditorApplication.selectedData.IsOf(texture);
+
+					if (ImGui.Selectable(texture.Name, ref selected) && selected)
+					{
+						EditorApplication.selectedData = new SelectionData(texture);
+					}
 
 					if (ImGui.BeginPopupContextItem())
 					{
 						if (ImGui.Button($"{IcoMoon.MinusIcon} Remove"))
 						{
-							EditorApplication.State.Textures.Remove(texture);
-							if (EditorApplication.selectedTextureName == texture)
-								EditorApplication.selectedTextureName = string.Empty;
+							EditorApplication.State.Textures.Remove(texture.Name);
+							if (EditorApplication.selectedData.IsOf(texture))
+								EditorApplication.selectedData.Empty();
 						}
 
 						ImGui.EndPopup();
-					}
-
-					if (selected)
-					{
-						EditorApplication.selectedEntityName = string.Empty;
-						EditorApplication.selectedTextureName = texture;
 					}
 				}
 
@@ -284,139 +381,162 @@ namespace Editor.Gui
 
 		private static void DrawUiProperties()
 		{
+			ImGui.BeginChild("Selected Entity Properties", ImGui.GetContentRegionAvail().Y * NVector2.UnitY, ImGuiChildFlags.FrameStyle);
 			ImGui.Text($"{IcoMoon.EqualizerIcon} Properties");
-			ImGui.BeginChild(3, NVector2.UnitY * 208, ImGuiChildFlags.FrameStyle);
 			int currentKeyframe = EditorApplication.State.Animator.CurrentKeyframe;
+			bool isSelectedDataValid = EditorApplication.selectedData.GetValue(out object obj);
 
-			if (!string.IsNullOrEmpty(EditorApplication.selectedEntityName))
+			if (!isSelectedDataValid)
 			{
-				TextureEntity selectedTextureEntity = EditorApplication.State.GraphicEntities[EditorApplication.selectedEntityName];
+				ImGui.EndChild();
 
-				string tempEntityName = SavedInput(string.Empty, selectedTextureEntity.Name);
-				ImGui.SameLine();
+				return;
+			}
 
-				if (ImGui.Button("Rename") && !EditorApplication.State.GraphicEntities.ContainsKey(tempEntityName))
+			switch (EditorApplication.selectedData.ObjectSelectionType)
+			{
+				case SelectionType.Graphic:
 				{
-					EditorApplication.RenameEntity(selectedTextureEntity, tempEntityName);
-					ResetSavedInput();
-				}
+					TextureEntity selectedTextureEntity = (TextureEntity)obj;
 
-				ImGui.Separator();
+					string tempEntityName = SavedInput(string.Empty, EditorApplication.selectedData.Name);
+					ImGui.SameLine();
 
-				ImGui.Columns(2);
-				ImGui.SetColumnWidth(0, 28);
-
-				ImGui.NextColumn();
-				ImGui.Text("All properties");
-				ImGui.Separator();
-				ImGui.NextColumn();
-
-				int keyframeButtonId = 0;
-
-				foreach (KeyframeableValue keyframeableValue in selectedTextureEntity.EnumerateKeyframeableValues())
-				{
-					ImGui.PushID(keyframeButtonId++);
-
-					ImGui.PopID();
-
-					ImGui.NextColumn();
-
-					switch (keyframeableValue.Name)
+					if (ImGui.Button("Rename") && !EditorApplication.State.GraphicEntities.ContainsKey(tempEntityName))
 					{
-						case ScaleProperty:
-						case PositionProperty:
-							Vector2 vector2 = ((Vector2KeyframeValue)keyframeableValue).CachedValue;
-
-							NVector2 newVector2 = new NVector2(vector2.X, vector2.Y);
-
-							if (ImGui.DragFloat2(keyframeableValue.Name, ref newVector2))
-								keyframeableValue.SetKeyframeValue(EditorApplication.State.Animator.CurrentKeyframe, (Vector2)newVector2);
-
-							break;
-						case FrameIndexProperty:
-							int frameIndex = ((IntKeyframeValue)keyframeableValue).CachedValue;
-
-							TextureFrame texture = EditorApplication.State.GetTexture(selectedTextureEntity.TextureId);
-							int framesX = texture.Width / texture.FrameSize.X;
-							int framesY = texture.Height / texture.FrameSize.Y;
-
-							if (ImGui.SliderInt(keyframeableValue.Name, ref frameIndex, 0, framesX * framesY - 1))
-								keyframeableValue.SetKeyframeValue(EditorApplication.State.Animator.CurrentKeyframe, frameIndex);
-
-							break;
-						case RotationProperty:
-							float rotation = ((FloatKeyframeValue)keyframeableValue).CachedValue;
-							rotation = MathHelper.ToDegrees(rotation);
-
-							if (ImGui.DragFloat(keyframeableValue.Name, ref rotation, 1f, -360, 360, "%.0f deg", ImGuiSliderFlags.NoRoundToFormat))
-								keyframeableValue.SetKeyframeValue(EditorApplication.State.Animator.CurrentKeyframe, MathHelper.ToRadians(rotation));
-
-							break;
-						case TransparencyProperty:
-							float transparency = ((FloatKeyframeValue)keyframeableValue).CachedValue;
-
-							if (ImGui.DragFloat(keyframeableValue.Name, ref transparency, 0.001f, 0, 1f, "%f%", ImGuiSliderFlags.NoRoundToFormat))
-								keyframeableValue.SetKeyframeValue(EditorApplication.State.Animator.CurrentKeyframe, transparency);
-
-							break;
+						EditorApplication.RenameEntity(selectedTextureEntity, tempEntityName);
+						ResetSavedInput();
 					}
 
+					ImGui.Separator();
+
+					ImGui.Columns(2);
+					ImGui.SetColumnWidth(0, 28);
+
 					ImGui.NextColumn();
-				}
+					ImGui.Text("All properties");
+					ImGui.Separator();
+					ImGui.NextColumn();
 
-				if (EditorApplication.State.Animator.RegisteredGraphics.EntityHasKeyframeAtFrame(EditorApplication.selectedEntityName, currentKeyframe)) //TODO: select interpolation type in menu
+					int keyframeButtonId = 0;
+
+					foreach (KeyframeableValue keyframeableValue in selectedTextureEntity.EnumerateKeyframeableValues())
+					{
+						ImGui.PushID(keyframeButtonId++);
+
+						ImGui.PopID();
+
+						ImGui.NextColumn();
+
+						switch (keyframeableValue.Name)
+						{
+							case ScaleProperty:
+							case PositionProperty:
+								Vector2 vector2 = ((Vector2KeyframeValue)keyframeableValue).CachedValue;
+
+								NVector2 newVector2 = new NVector2(vector2.X, vector2.Y);
+
+								if (ImGui.DragFloat2(keyframeableValue.Name, ref newVector2))
+									keyframeableValue.SetKeyframeValue(EditorApplication.State.Animator.CurrentKeyframe, (Vector2)newVector2);
+
+								break;
+							case FrameIndexProperty:
+								int frameIndex = ((IntKeyframeValue)keyframeableValue).CachedValue;
+
+								TextureFrame texture = EditorApplication.State.GetTexture(selectedTextureEntity.TextureId);
+								int framesX = texture.Width / texture.FrameSize.X;
+								int framesY = texture.Height / texture.FrameSize.Y;
+
+								if (ImGui.SliderInt(keyframeableValue.Name, ref frameIndex, 0, framesX * framesY - 1))
+									keyframeableValue.SetKeyframeValue(EditorApplication.State.Animator.CurrentKeyframe, frameIndex);
+
+								break;
+							case RotationProperty:
+								float rotation = ((FloatKeyframeValue)keyframeableValue).CachedValue;
+								rotation = MathHelper.ToDegrees(rotation);
+
+								if (ImGui.DragFloat(keyframeableValue.Name, ref rotation, 1f, -360, 360, "%.0f deg", ImGuiSliderFlags.NoRoundToFormat))
+									keyframeableValue.SetKeyframeValue(EditorApplication.State.Animator.CurrentKeyframe, MathHelper.ToRadians(rotation));
+
+								break;
+							case TransparencyProperty:
+								float transparency = ((FloatKeyframeValue)keyframeableValue).CachedValue;
+
+								if (ImGui.DragFloat(keyframeableValue.Name, ref transparency, 0.001f, 0, 1f, "%f%", ImGuiSliderFlags.NoRoundToFormat))
+									keyframeableValue.SetKeyframeValue(EditorApplication.State.Animator.CurrentKeyframe, transparency);
+
+								break;
+						}
+
+						ImGui.NextColumn();
+					}
+
+					break;
+				}
+				case SelectionType.Texture:
 				{
-					// ImGui.ListBox("")
+					const float scale = 2f;
+					TextureFrame selectedTexture = (TextureFrame)obj;
+					Point currentFrameSize = selectedTexture.FrameSize;
+					Point currentFramePosition = selectedTexture.FramePosition;
+					NVector2 currentPivot = selectedTexture.Pivot;
+
+					unsafe
+					{
+						ImGui.Text("Frame size");
+						GCHandle handle = GCHandle.Alloc(currentFrameSize, GCHandleType.Pinned); // why isnt imgui.dragint2 using ref Point as a parameter :(((((((((
+						ImGui.DragScalarN("##Frame size slider", ImGuiDataType.S32, handle.AddrOfPinnedObject(), 2);
+						currentFrameSize.X = ((int*)handle.AddrOfPinnedObject().ToPointer())[0];
+						currentFrameSize.Y = ((int*)handle.AddrOfPinnedObject().ToPointer())[1];
+						handle.Free();
+
+						ImGui.Text("Frame position");
+						handle = GCHandle.Alloc(currentFramePosition, GCHandleType.Pinned); // why isnt imgui.dragint2 using ref Point as a parameter :(((((((((
+						ImGui.DragScalarN("##Frame position slider", ImGuiDataType.S32, handle.AddrOfPinnedObject(), 2);
+						currentFramePosition.X = ((int*)handle.AddrOfPinnedObject().ToPointer())[0];
+						currentFramePosition.Y = ((int*)handle.AddrOfPinnedObject().ToPointer())[1];
+						handle.Free();
+					}
+
+					ImGui.BeginGroup();
+					ImGui.Text("Pivot");
+					ImGui.DragFloat2("##Pivot x", ref currentPivot);
+					ImGui.EndGroup();
+
+					selectedTexture.FramePosition = currentFramePosition;
+					selectedTexture.FrameSize = currentFrameSize;
+					selectedTexture.Pivot = currentPivot;
+
+					NVector2 scaledFrameSize = new NVector2(currentFrameSize.X * scale, currentFrameSize.Y * scale);
+					NVector2 scaledPivot = currentPivot * scale;
+
+					ImGui.BeginChild("Pivot renderer", NVector2.UnitY * 154f, ImGuiChildFlags.FrameStyle);
+
+					NVector2 contentSize = ImGui.GetContentRegionAvail();
+					NVector2 center = ImGui.GetCursorScreenPos() + contentSize * 0.5f;
+					NVector2 frameStart = center - scaledFrameSize * 0.5f;
+
+					// draw frame size
+					ImDrawListPtr drawList = ImGui.GetWindowDrawList();
+					drawList.AddRect(frameStart, frameStart + scaledFrameSize, Color.GreenYellow.PackedValue);
+
+					// horizontal line
+					drawList.AddLine(center - NVector2.UnitX * scaledFrameSize * 0.5f,
+						center + NVector2.UnitX * scaledFrameSize * 0.5f,
+						Color.ForestGreen.PackedValue);
+
+					// vertical line
+					drawList.AddLine(center - NVector2.UnitY * scaledFrameSize * 0.5f,
+						center + NVector2.UnitY * scaledFrameSize * 0.5f,
+						Color.ForestGreen.PackedValue);
+
+					// draw pivot
+					drawList.AddCircleFilled(frameStart + scaledPivot, 4, Color.White.PackedValue);
+
+					ImGui.EndChild();
+
+					break;
 				}
-			}
-			else if (!string.IsNullOrEmpty(EditorApplication.selectedTextureName))
-			{
-				const float scale = 2f;
-				TextureFrame selectedTexture = EditorApplication.State.GetTexture(EditorApplication.selectedTextureName);
-				Point currentFrameSize = selectedTexture.FrameSize;
-				NVector2 currentPivot = selectedTexture.Pivot;
-
-				unsafe
-				{
-					GCHandle handle = GCHandle.Alloc(currentFrameSize, GCHandleType.Pinned); // why isnt imgui.dragint2 using ref Point as a parameter :(((((((((
-					ImGui.DragScalarN("Framesize", ImGuiDataType.S32, handle.AddrOfPinnedObject(), 2);
-					currentFrameSize.X = ((int*)handle.AddrOfPinnedObject().ToPointer())[0];
-					currentFrameSize.Y = ((int*)handle.AddrOfPinnedObject().ToPointer())[1];
-					handle.Free();
-				}
-
-				ImGui.DragFloat2("Pivot", ref currentPivot);
-
-				selectedTexture.FrameSize = currentFrameSize;
-				selectedTexture.Pivot = currentPivot;
-
-				NVector2 scaledFrameSize = new NVector2(currentFrameSize.X * scale, currentFrameSize.Y * scale);
-				NVector2 scaledPivot = currentPivot * scale;
-
-				ImGui.BeginChild(2, NVector2.UnitY * 154f, ImGuiChildFlags.FrameStyle);
-
-				NVector2 contentSize = ImGui.GetContentRegionAvail();
-				NVector2 center = ImGui.GetCursorScreenPos() + contentSize * 0.5f;
-				NVector2 frameStart = center - scaledFrameSize * 0.5f;
-
-				// draw frame size
-				ImDrawListPtr drawList = ImGui.GetWindowDrawList();
-				drawList.AddRect(frameStart, frameStart + scaledFrameSize, Color.GreenYellow.PackedValue);
-
-				// horizontal line
-				drawList.AddLine(center - NVector2.UnitX * scaledFrameSize * 0.5f,
-					center + NVector2.UnitX * scaledFrameSize * 0.5f,
-					Color.ForestGreen.PackedValue);
-
-				// vertical line
-				drawList.AddLine(center - NVector2.UnitY * scaledFrameSize * 0.5f,
-					center + NVector2.UnitY * scaledFrameSize * 0.5f,
-					Color.ForestGreen.PackedValue);
-
-				// draw pivot
-				drawList.AddCircleFilled(frameStart + scaledPivot, 4, Color.White.PackedValue);
-
-				ImGui.EndChild();
 			}
 
 			ImGui.EndChild();

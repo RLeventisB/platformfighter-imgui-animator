@@ -91,13 +91,19 @@ namespace Editor.Model
 		{
 			int firstFrame = int.MaxValue;
 
-			foreach (IEntity entity in GetAllEntities())
+			foreach (TextureEntity entity in RegisteredGraphics)
 			{
 				foreach (KeyframeableValue value in entity.EnumerateKeyframeableValues())
 				{
 					if (value.HasKeyframes() && value[0].Frame < firstFrame)
 						firstFrame = value[0].Frame;
 				}
+			}
+
+			foreach (HitboxEntity hitbox in RegisteredHitboxes)
+			{
+				if (hitbox.SpawnFrame < firstFrame)
+					firstFrame = hitbox.SpawnFrame;
 			}
 
 			return firstFrame == int.MaxValue ? 0 : firstFrame;
@@ -107,18 +113,24 @@ namespace Editor.Model
 		{
 			int lastFrame = int.MinValue;
 
-			foreach (IEntity entity in GetAllEntities())
+			foreach (TextureEntity entity in RegisteredGraphics)
 			{
 				foreach (KeyframeableValue value in entity.EnumerateKeyframeableValues())
 				{
-					if (value.HasKeyframes())
-					{
-						int lastIndex = value.KeyframeCount - 1;
+					if (!value.HasKeyframes())
+						continue;
 
-						if (value[lastIndex].Frame > lastFrame)
-							lastFrame = value[lastIndex].Frame;
-					}
+					int lastIndex = value.KeyframeCount - 1;
+
+					if (value[lastIndex].Frame > lastFrame)
+						lastFrame = value[lastIndex].Frame;
 				}
+			}
+
+			foreach (HitboxEntity hitbox in RegisteredHitboxes)
+			{
+				if (hitbox.EndFrame > lastFrame)
+					lastFrame = hitbox.EndFrame;
 			}
 
 			return lastFrame == int.MinValue ? 0 : lastFrame;
@@ -129,7 +141,7 @@ namespace Editor.Model
 			int f = frame ?? _currentKeyframe;
 			int previousFrame = GetFirstFrame();
 
-			foreach (IEntity entity in GetAllEntities())
+			foreach (TextureEntity entity in GetAllEntities())
 			{
 				foreach (KeyframeableValue value in entity.EnumerateKeyframeableValues())
 				{
@@ -158,7 +170,7 @@ namespace Editor.Model
 			int f = frame ?? _currentKeyframe;
 			int nextFrame = GetLastFrame();
 
-			foreach (IEntity entity in GetAllEntities())
+			foreach (TextureEntity entity in GetAllEntities())
 			{
 				foreach (KeyframeableValue value in entity.EnumerateKeyframeableValues())
 				{
@@ -280,10 +292,10 @@ namespace Editor.Model
 
 		public bool HasKeyframes()
 		{
-			return GetAllEntities().Any(EntityHasKeyframes);
+			return RegisteredGraphics.Any(EntityHasKeyframes);
 		}
 
-		public static bool EntityHasKeyframes(IEntity entity)
+		public static bool EntityHasKeyframes(TextureEntity entity)
 		{
 			foreach (KeyframeableValue value in entity.EnumerateKeyframeableValues())
 			{
@@ -294,7 +306,19 @@ namespace Editor.Model
 			return false;
 		}
 
-		public int GetTrackKey(string entityName, string trackName) => $"{entityName}_{trackName}".GetHashCode();
+		public bool EntityHasKeyframeAtFrame(string entityName, int frame)
+		{
+			if (!RegisteredGraphics.TryGetValue(entityName, out TextureEntity entity))
+				return false;
+
+			foreach (KeyframeableValue value in entity.EnumerateKeyframeableValues())
+			{
+				if (value.HasKeyframeAtFrame(frame))
+					return true;
+			}
+
+			return false;
+		}
 
 		public List<IEntity> GetAllEntities()
 		{
@@ -330,31 +354,13 @@ namespace Editor.Model
 
 		public bool ChangeEntityName(string oldName, string newName)
 		{
-			if (registry.ContainsKey(oldName))
-			{
-				T entity = registry[oldName];
-				registry.Remove(oldName);
-				entity.Name = newName;
-				registry[newName] = entity;
-
-				return true;
-			}
-
-			return false;
-		}
-
-		public bool EntityHasKeyframeAtFrame(string entityName, int frame)
-		{
-			if (!registry.TryGetValue(entityName, out T entity))
+			if (!registry.Remove(oldName, out T entity))
 				return false;
 
-			foreach (KeyframeableValue value in entity.EnumerateKeyframeableValues())
-			{
-				if (value.HasKeyframeAtFrame(frame))
-					return true;
-			}
+			entity.Name = newName;
+			registry[newName] = entity;
 
-			return false;
+			return true;
 		}
 	}
 }

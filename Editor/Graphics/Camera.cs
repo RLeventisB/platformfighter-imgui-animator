@@ -26,7 +26,7 @@ namespace Editor.Graphics
 				if (lastSize != size)
 				{
 					lastSize = size;
-					_projection = Matrix.CreateOrthographic(size.X, size.Y, -1, 1);
+					_projection = Matrix.CreateOrthographic(size.X, -size.Y, -1, 1);
 				}
 
 				return _projection;
@@ -62,8 +62,8 @@ namespace Editor.Graphics
 		{
 			Matrix matrix = Matrix.Invert(Matrix.Multiply(Matrix.Multiply(Matrix.Identity, View), Projection));
 			mousePosition.X = (mousePosition.X - viewport.X) / viewport.Width * 2f - 1f;
-			mousePosition.Y = 0f - ((mousePosition.Y - viewport.Y) / viewport.Height * 2f - 1f);
-			float z = (0 - viewport.MinDepth) / (viewport.MaxDepth - viewport.MinDepth);
+			mousePosition.Y = -((mousePosition.Y - viewport.Y) / viewport.Height * 2f - 1f);
+			float z = viewport.MinDepth / (viewport.MaxDepth - viewport.MinDepth);
 			Vector2 result = Vector2.Transform(mousePosition, matrix);
 			float num = mousePosition.X * matrix.M14 + mousePosition.Y * matrix.M24 + z * matrix.M34 + matrix.M44;
 
@@ -91,11 +91,9 @@ namespace Editor.Graphics
 			}
 
 			result.X = (result.X + 1f) * 0.5f * viewport.Width + viewport.X;
-			result.Y = (0f - result.Y + 1f) * 0.5f * viewport.Height + viewport.Y;
+			result.Y = (-result.Y + 1f) * 0.5f * viewport.Height + viewport.Y;
 
 			return result;
-
-			// return viewport.Project(worldPosition, Projection, View, Matrix.Identity);
 		}
 
 		public static void Move(Vector3 movement)

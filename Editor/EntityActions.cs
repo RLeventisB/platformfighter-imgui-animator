@@ -11,9 +11,9 @@ namespace Editor
 {
 	public static class EntityActions
 	{
-		public static bool DoActions(string entityName)
+		public static bool DoGraphicEntityActions(SelectionData data)
 		{
-			if (string.IsNullOrEmpty(entityName) || !EditorApplication.State.GraphicEntities.TryGetValue(entityName, out TextureEntity entity))
+			if (string.IsNullOrEmpty(data.Name) || !EditorApplication.State.GraphicEntities.TryGetValue(data.Name, out TextureEntity entity))
 				return false;
 
 			Vector2 worldPos = entity.Position.CachedValue;
