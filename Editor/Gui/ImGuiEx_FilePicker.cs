@@ -1,10 +1,7 @@
-﻿using ImGuiNET;
-
-using Microsoft.Xna.Framework;
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 
 namespace Editor.Gui
@@ -13,74 +10,78 @@ namespace Editor.Gui
 	{
 		public struct FilePickerDefinition
 		{
+			private DirectoryInfo _currentFolderInfo = null;
 			public string ActionButtonLabel;
-			public string RootFolder;
-			public string CurrentFolder;
+			public readonly string StartingFolder;
+			public string FolderModifications;
+			public string AssemblyPath;
 			public string SelectedFileName;
-			public string SelectedAbsolutePath;
-			public string SelectedRelativePath;
-			public string executingPath;
-			public bool OnlyAllowFolders;
-			public List<string> AllowedExtensions;
+			public string SearchFilter;
+			public FileInfo SelectedFileInfo;
+			public List<FileInfo> FolderFiles = new List<FileInfo>();
+			public List<DirectoryInfo> FolderFolders = new List<DirectoryInfo>(); // lol
+
+			public FilePickerDefinition(string actionButtonLabel, string searchFilter)
+			{
+				ActionButtonLabel = actionButtonLabel;
+				SearchFilter = searchFilter;
+				StartingFolder = AppContext.BaseDirectory;
+				FolderModifications = ".";
+				AssemblyPath = Path.GetDirectoryName(Assembly.GetEntryAssembly()?.Location);
+				SelectFolder(new DirectoryInfo(StartingFolder));
+			}
+
+			public void SelectFolder(DirectoryInfo directoryInfo)
+			{
+				if (directoryInfo == null || !directoryInfo.Exists)
+					return;
+
+				_currentFolderInfo = directoryInfo;
+				FolderFiles = _currentFolderInfo.GetFiles(SearchFilter).ToList();
+				FolderFolders = _currentFolderInfo.GetDirectories("*.*").ToList();
+			}
+
+			public void SelectFile(FileInfo fileInfo)
+			{
+				if (fileInfo is null)
+					return;
+
+				SelectedFileInfo = fileInfo;
+				SelectedFileName = fileInfo.Name;
+			}
+
+			public string SelectedFileFullPath => SelectedFileInfo.FullName;
+			public DirectoryInfo CurrentFolderInfo => _currentFolderInfo;
+			public string CurrentFolderPath => _currentFolderInfo.FullName;
 		}
 
-		public static FilePickerDefinition CreateFilePickerDefinition(string startingPath, string actionLabel, string searchFilter = null,
-			bool onlyAllowFolders = false)
+		public static FilePickerDefinition CreateFilePickerDefinition(string actionLabel, string searchFilter = "*.*")
 		{
-			if (File.Exists(startingPath))
-			{
-				startingPath = new FileInfo(startingPath).DirectoryName;
-			}
-			else if (string.IsNullOrEmpty(startingPath) || !Directory.Exists(startingPath))
-			{
-				startingPath = Environment.CurrentDirectory;
-				if (string.IsNullOrEmpty(startingPath))
-					startingPath = AppContext.BaseDirectory;
-			}
-
-			FilePickerDefinition fp = new FilePickerDefinition
-			{
-				RootFolder = "/",
-				CurrentFolder = startingPath,
-				OnlyAllowFolders = onlyAllowFolders,
-				ActionButtonLabel = actionLabel,
-				executingPath = Path.GetDirectoryName(Assembly.GetEntryAssembly()?.Location)
-			};
-
-			if (searchFilter != null)
-			{
-				if (fp.AllowedExtensions != null)
-					fp.AllowedExtensions.Clear();
-				else
-					fp.AllowedExtensions = new List<string>();
-
-				fp.AllowedExtensions.AddRange(searchFilter.Split(new[] { '|' },
-					StringSplitOptions.RemoveEmptyEntries));
-			}
+			FilePickerDefinition fp = new FilePickerDefinition(actionLabel, searchFilter);
 
 			return fp;
 		}
 
-		public static bool DoFilePicker(ref FilePickerDefinition fpDef)
+		/*public static bool DoFilePicker(ref FilePickerDefinition fpDef)
 		{
-			ImGui.Text(Path.GetFileName(fpDef.RootFolder) + fpDef.CurrentFolder.Replace(fpDef.RootFolder, ""));
+			ImGui.Text("Selecciona arhchivos.,");
 			bool result = false;
 
 			NVector2 ch = ImGui.GetContentRegionAvail();
 			float frameHeight = ch.Y - (ImGui.GetTextLineHeight() * 2 + ImGui.GetStyle().WindowPadding.Y * 3.5f);
 
-			if (ImGui.BeginChild(1, new NVector2(0, frameHeight), ImGuiChildFlags.FrameStyle,
+			if (ImGui.BeginChild("##Directory Viewer", new NVector2(0, frameHeight), ImGuiChildFlags.FrameStyle,
 				ImGuiWindowFlags.ChildWindow | ImGuiWindowFlags.NoResize))
 			{
-				DirectoryInfo di = new DirectoryInfo(fpDef.CurrentFolder);
+				DirectoryInfo di = new DirectoryInfo(fpDef.FolderModifications);
 
 				if (di.Exists)
 				{
-					if (di.Parent != null && fpDef.CurrentFolder != fpDef.RootFolder)
+					if (di.Parent != null && fpDef.FolderModifications != fpDef.StartingFolder)
 					{
 						ImGui.PushStyleColor(ImGuiCol.Text, Color.Yellow.PackedValue);
 						if (ImGui.Selectable("../", false, ImGuiSelectableFlags.NoAutoClosePopups))
-							fpDef.CurrentFolder = di.Parent.FullName;
+							fpDef.FolderModifications = di.Parent.FullName;
 
 						ImGui.PopStyleColor();
 					}
@@ -94,7 +95,7 @@ namespace Editor.Gui
 							string name = Path.GetFileName(fse);
 							ImGui.PushStyleColor(ImGuiCol.Text, Color.Yellow.PackedValue);
 							if (ImGui.Selectable(name + "/", false, ImGuiSelectableFlags.NoAutoClosePopups))
-								fpDef.CurrentFolder = fse;
+								fpDef.FolderModifications = fse;
 
 							ImGui.PopStyleColor();
 						}
@@ -119,14 +120,14 @@ namespace Editor.Gui
 
 			if (fpDef.OnlyAllowFolders)
 			{
-				fpDef.SelectedAbsolutePath = fpDef.CurrentFolder;
-				fpDef.SelectedRelativePath = fpDef.SelectedAbsolutePath.Substring(fpDef.executingPath.Length + 1);
+				fpDef.SelectedAbsolutePath = fpDef.FolderModifications;
+				fpDef.SelectedRelativePath = fpDef.SelectedAbsolutePath.Substring(fpDef.AssemblyPath.Length + 1);
 			}
 			else
 			{
 				if (!string.IsNullOrEmpty(fpDef.SelectedAbsolutePath))
 				{
-					fpDef.SelectedRelativePath = fpDef.SelectedAbsolutePath.Substring(fpDef.executingPath.Length + 1);
+					fpDef.SelectedRelativePath = fpDef.SelectedAbsolutePath.Substring(fpDef.AssemblyPath.Length + 1);
 					fpDef.SelectedFileName = Path.GetFileName(fpDef.SelectedAbsolutePath);
 				}
 
@@ -136,8 +137,8 @@ namespace Editor.Gui
 
 				if (!string.IsNullOrEmpty(fileName))
 				{
-					fpDef.SelectedAbsolutePath = Path.Combine(fpDef.CurrentFolder, fileName);
-					fpDef.SelectedRelativePath = Path.Combine(Path.GetDirectoryName(fpDef.SelectedRelativePath ?? fpDef.CurrentFolder), fileName);
+					fpDef.SelectedAbsolutePath = Path.Combine(fpDef.FolderModifications, fileName);
+					fpDef.SelectedRelativePath = Path.Combine(Path.GetDirectoryName(fpDef.SelectedRelativePath ?? fpDef.FolderModifications), fileName);
 				}
 			}
 
@@ -191,6 +192,6 @@ namespace Editor.Gui
 			ret.AddRange(files);
 
 			return ret;
-		}
+		}*/
 	}
 }

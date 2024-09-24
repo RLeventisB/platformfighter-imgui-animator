@@ -1,4 +1,5 @@
-﻿using Editor.Model;
+﻿using Editor.Gui;
+using Editor.Model;
 
 namespace Editor
 {
@@ -11,6 +12,9 @@ namespace Editor
 
 		public SelectionData(IEntity entity) : this(entity.Name, entity)
 		{
+			Hierarchy.PivotViewerZoom = 1;
+			Hierarchy.PivotViewerOffset = Vector2.Zero;
+			ResetSavedInput();
 		}
 
 		public SelectionData(TextureFrame frame) : this(frame.Name, frame)

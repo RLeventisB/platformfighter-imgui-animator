@@ -26,6 +26,7 @@ namespace Editor.Model
 			_textureId = EditorApplication.ImguiRenderer.BindTexture(_texture);
 		}
 
+		public Point Size => new Point(Width, Height);
 		public int Width => _texture.Width;
 		public int Height => _texture.Height;
 		public Texture2D Texture => _texture;

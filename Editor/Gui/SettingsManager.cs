@@ -41,9 +41,9 @@ namespace Editor.Gui
 			LockToolWindows
 		];
 
-		public static void LoadProject()
+		public static void LoadProject(string filePath)
 		{
-			using (FileStream stream = File.OpenRead(Hierarchy.OpenFdDefinition.SelectedRelativePath))
+			using (FileStream stream = File.OpenRead(filePath))
 			{
 				using (BinaryReader reader = new BinaryReader(stream))
 				{
@@ -176,9 +176,9 @@ namespace Editor.Gui
 			}
 		}
 
-		public static void SaveProject()
+		public static void SaveProject(string filePath)
 		{
-			using (FileStream stream = File.Open(Hierarchy.OpenFdDefinition.SelectedRelativePath, FileMode.OpenOrCreate))
+			using (FileStream stream = File.Open(filePath, FileMode.OpenOrCreate))
 			{
 				using (BinaryWriter writer = new BinaryWriter(stream))
 				{
@@ -203,7 +203,7 @@ namespace Editor.Gui
 					foreach (TextureEntity entity in EditorApplication.State.Animator.RegisteredGraphics)
 					{
 						writer.Write(entity.Name);
-						writer.Write(entity.TextureId);
+						writer.Write(entity.TextureName);
 
 						SaveEntityKeyframes(entity, writer);
 					}

@@ -4,7 +4,7 @@ namespace Editor.Model
 {
 	public class TextureEntity : IEntity
 	{
-		public TextureEntity(string name, string textureId)
+		public TextureEntity(string name, string textureName)
 		{
 			Scale = new Vector2KeyframeValue(this, Vector2.One, ScaleProperty);
 			FrameIndex = new IntKeyframeValue(this, 0, FrameIndexProperty);
@@ -12,10 +12,10 @@ namespace Editor.Model
 			Name = name;
 			Position = new Vector2KeyframeValue(this, Vector2.Zero, PositionProperty);
 			Transparency = new FloatKeyframeValue(this, 1, TransparencyProperty);
-			TextureId = textureId;
+			TextureName = textureName;
 		}
 
-		public string TextureId { get; }
+		public string TextureName { get; set; }
 		public Vector2KeyframeValue Scale { get; set; }
 		public IntKeyframeValue FrameIndex { get; set; }
 		public FloatKeyframeValue Rotation { get; set; }
@@ -26,7 +26,7 @@ namespace Editor.Model
 
 		public bool IsBeingHovered(Vector2 mouseWorld, int frame)
 		{
-			Vector2 size = EditorApplication.State.GetTexture(TextureId).FrameSize.ToVector2() * Scale.Interpolate(frame);
+			Vector2 size = EditorApplication.State.GetTexture(TextureName).FrameSize.ToVector2() * Scale.Interpolate(frame);
 
 			return IsInsideRectangle(Position.Interpolate(frame), size, Rotation.Interpolate(frame), mouseWorld);
 		}

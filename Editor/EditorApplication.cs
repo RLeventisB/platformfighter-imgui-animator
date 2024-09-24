@@ -338,13 +338,15 @@ namespace Editor
 				float rotation = entity.Rotation.CachedValue;
 				Vector2 scale = entity.Scale.CachedValue;
 
-				TextureFrame texture = State.GetTexture(entity.TextureId);
+				TextureFrame texture = State.GetTexture(entity.TextureName);
 				int framesX = texture.Width / texture.FrameSize.X;
+				if (framesX == 0)
+					framesX = 1;
 
 				int x = frameIndex % framesX;
 				int y = frameIndex / framesX;
 
-				Rectangle sourceRect = new Rectangle(x * texture.FrameSize.X, y * texture.FrameSize.Y,
+				Rectangle sourceRect = new Rectangle(texture.FramePosition.X + x * texture.FrameSize.X, texture.FramePosition.Y + y * texture.FrameSize.Y,
 					texture.FrameSize.X, texture.FrameSize.Y);
 
 				spriteBatch.Draw(texture, position, sourceRect, color,
@@ -358,7 +360,7 @@ namespace Editor
 		private void DrawSpriteBounds(ImDrawListPtr drawlist, string entityId, uint color)
 		{
 			TextureEntity textureEntity = State.GraphicEntities[entityId];
-			TextureFrame texture = State.GetTexture(textureEntity.TextureId);
+			TextureFrame texture = State.GetTexture(textureEntity.TextureName);
 			Vector2 position = textureEntity.Position.CachedValue;
 			Vector2 scale = textureEntity.Scale.CachedValue * Camera.Zoom;
 			float rotation = textureEntity.Rotation.CachedValue;
@@ -493,6 +495,29 @@ namespace Editor
 			selectedData = new SelectionData(textureEntity);
 		}
 
+		public static void RenameTexture(TextureFrame textureFrame, string newName)
+		{
+			string oldName = textureFrame.Name;
+			State.Textures.Remove(oldName);
+			State.Textures[newName] = textureFrame;
+			textureFrame.Name = newName;
+
+			foreach (TextureEntity entity in State.GraphicEntities.Values)
+			{
+				if (entity.TextureName == oldName)
+				{
+					entity.TextureName = newName;
+				}
+			}
+
+			selectedData = new SelectionData(textureFrame);
+		}
+
+		public static void SelectLink(KeyframeLink link)
+		{
+			Timeline.selectedLink = new SelectedLinkData(link, link.linkedValue.Name);
+		}
+
 		public static void SetDragAction(DragAction action)
 		{
 			if (currentDragAction is not null)
@@ -501,11 +526,6 @@ namespace Editor
 			}
 
 			currentDragAction = action;
-		}
-
-		public static void SelectLink(KeyframeLink link)
-		{
-			Timeline.selectedLink = new SelectedLinkData(link, link.linkedValue.Name);
 		}
 	}
 	public record SelectedLinkData

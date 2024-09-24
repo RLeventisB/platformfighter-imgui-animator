@@ -185,6 +185,15 @@ namespace Editor.Gui
 			return new Vector2(reader.ReadSingle(), reader.ReadSingle());
 		}
 
+		public static float InverseLerp(float value, float min, float max)
+		{
+			return (value - min) / (max - min);
+		}
+		
+		public static NVector2 InverseLerp(NVector2 value, NVector2 min, NVector2 max)
+		{
+			return (value - min) / (max - min);
+		}
 		public static string SavedInput(string id, string defaultInput)
 		{
 			if (string.IsNullOrEmpty(savingInputString))
@@ -195,9 +204,9 @@ namespace Editor.Gui
 			return savingInputString;
 		}
 
-		public static void ResetSavedInput()
+		public static void ResetSavedInput(string newInput = null)
 		{
-			savingInputString = string.Empty;
+			savingInputString = newInput ?? string.Empty;
 		}
 
 		public static bool ToggleButton(string id, string descr, ref bool toggled)

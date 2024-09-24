@@ -20,7 +20,7 @@ namespace Editor
 
 			float rotation = entity.Rotation.CachedValue;
 			Vector2 scale = entity.Scale.CachedValue * Camera.Zoom;
-			Point textureSize = EditorApplication.State.GetTexture(entity.TextureId).FrameSize;
+			Point textureSize = EditorApplication.State.GetTexture(entity.TextureName).FrameSize;
 
 			(float sin, float cos) = MathF.SinCos(rotation);
 
