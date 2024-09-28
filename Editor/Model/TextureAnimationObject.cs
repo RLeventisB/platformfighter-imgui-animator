@@ -1,5 +1,9 @@
-﻿using System.Collections.Generic;
+﻿using Editor.Gui;
+
+using System.Collections.Generic;
 using System.IO;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Editor.Model
 {
@@ -21,7 +25,7 @@ namespace Editor.Model
 		public Vector2KeyframeValue Scale { get; set; }
 		public IntKeyframeValue FrameIndex { get; set; }
 		public FloatKeyframeValue Rotation { get; set; }
-
+		[JsonInclude]
 		public string Name { get; set; }
 		public Vector2KeyframeValue Position { get; set; }
 		public FloatKeyframeValue Transparency { get; set; }
@@ -37,53 +41,84 @@ namespace Editor.Model
 
 		public List<KeyframeableValue> EnumerateKeyframeableValues() => [Position, Scale, Rotation, FrameIndex, Transparency, ZIndex];
 
-		public void Save(BinaryWriter writer)
+		public void Save(Utf8JsonWriter writer)
 		{
-			writer.Write(Name);
-			writer.Write(TextureName);
+			//writer.WriteStartObject();
 
-			List<KeyframeableValue> values = EnumerateKeyframeableValues();
-			writer.Write(values.Count);
+			writer.WriteRawValue(JsonSerializer.SerializeToUtf8Bytes(this, SettingsManager.DefaultSerializerOptions));
 
-			foreach (KeyframeableValue value in values)
+			/*writer.WriteString("name", Name);
+			writer.WriteString("texture_name", TextureName);
+
+			writer.WriteStartArray("keyframe_properties");
+
+			foreach (KeyframeableValue value in EnumerateKeyframeableValues())
 			{
-				writer.Write(value.KeyframeCount);
+				writer.WriteStartObject();
+
+				writer.WriteString("name", value.Name);
+				writer.WriteString("type", value.GetType().Name);
+
+				writer.WriteStartArray("keyframes");
 
 				foreach (Keyframe keyframe in value.keyframes)
 				{
-					writer.Write(keyframe.Frame);
+					writer.WriteStartObject();
+
+					writer.WriteNumber("frame", keyframe.Frame);
 
 					switch (keyframe.Value)
 					{
 						case float floatValue:
-							writer.Write(floatValue);
+							writer.WriteNumber("value", floatValue);
 
 							break;
 						case int intValue:
-							writer.Write(intValue);
+							writer.WriteNumber("value", intValue);
 
 							break;
 						case Vector2 vector2Value:
-							writer.Write(vector2Value);
+							writer.WriteVector2("value", vector2Value);
 
 							break;
 					}
+
+					writer.WriteEndObject();
 				}
 
-				writer.Write(value.links.Count);
+				writer.WriteEndArray();
+
+				writer.WriteStartArray("links");
 
 				foreach (KeyframeLink link in value.links)
 				{
-					writer.Write((byte)link.InterpolationType);
-					writer.Write(link.UseRelativeProgressCalculation);
-					writer.Write(link.Keyframes.Count);
+					writer.WriteStartObject();
+
+					writer.WriteEnum("interpolation_type", link.InterpolationType);
+					writer.WriteBoolean("use_relative", link.UseRelativeProgressCalculation);
+
+					writer.WriteStartArray("link_keyframes");
 
 					foreach (Keyframe linkKeyframes in link.Keyframes)
 					{
-						writer.Write(linkKeyframes.Frame);
+						writer.WriteStartObject();
+						writer.WriteNumber("frame", linkKeyframes.Frame);
+						writer.WriteEndObject();
 					}
+
+					writer.WriteEndArray();
+
+					writer.WriteEndObject();
 				}
+
+				writer.WriteEndArray();
+
+				writer.WriteEndObject();
 			}
+
+			writer.WriteEndArray();
+
+			writer.WriteEndObject();*/
 		}
 
 		public static TextureAnimationObject Load(BinaryReader reader)

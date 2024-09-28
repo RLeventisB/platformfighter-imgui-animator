@@ -542,7 +542,7 @@ namespace Editor
 
 		public static void SelectLink(KeyframeLink link)
 		{
-			Timeline.selectedLink = new SelectedLinkData(link, link.linkedValue.Name);
+			Timeline.selectedLink = new SelectedLinkData(link, link.ContainingValue.Name);
 		}
 
 		public static void SetDragAction(DragAction action)
@@ -585,7 +585,7 @@ namespace Editor
 
 					for (int i = minFrame; i <= maxFrame; i++)
 					{
-						positions.Add(Camera.WorldToScreen(((Vector2KeyframeValue)link.linkedValue).Interpolate(i)));
+						positions.Add(Camera.WorldToScreen(((Vector2KeyframeValue)link.ContainingValue).Interpolate(i)));
 					}
 
 					KeyframeableValue.CacheValueOnInterpolate = true;

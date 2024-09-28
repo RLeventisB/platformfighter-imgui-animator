@@ -4,11 +4,34 @@ using ImGuiNET;
 
 using System.Collections;
 using System.IO;
+using System.IO.Compression;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Editor.Gui
 {
 	public static class SettingsManager
 	{
+		public static readonly JsonReaderOptions DefaultReaderOptions = new JsonReaderOptions
+		{
+			CommentHandling = JsonCommentHandling.Skip,
+			AllowTrailingCommas = true
+		};
+		public static readonly JsonWriterOptions DefaultWriterOptions = new JsonWriterOptions
+		{
+			Indented = true
+		};
+		public static readonly JsonSerializerOptions DefaultSerializerOptions = new JsonSerializerOptions
+		{
+			PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+			AllowTrailingCommas = true,
+			IncludeFields = true,
+			WriteIndented = true,
+			ReferenceHandler = ReferenceHandler.IgnoreCycles,
+			IgnoreReadOnlyFields = true,
+			IgnoreReadOnlyProperties = true
+		};
+
 		public static ImGuiWindowFlags ToolsWindowFlags => LockToolWindows ? ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoDocking : ImGuiWindowFlags.None;
 		public const int SaveFileMagicNumber = 1296649793;
 		public const int AllocatedSettings = 16;
@@ -43,6 +66,9 @@ namespace Editor.Gui
 
 		public static void LoadProject(string filePath)
 		{
+			/*				byte[] text = File.ReadAllBytes(filePath);
+				Utf8JsonReader reader = new Utf8JsonReader(text.AsSpan(), DefaultReaderOptions);
+*/
 			using (FileStream stream = File.OpenRead(filePath))
 			{
 				using (BinaryReader reader = new BinaryReader(stream))
@@ -103,34 +129,50 @@ namespace Editor.Gui
 
 		public static void SaveProject(string filePath)
 		{
-			using (FileStream stream = File.Open(filePath, FileMode.OpenOrCreate))
+			using (FileStream stream = File.Open(filePath, FileMode.OpenOrCreate, FileAccess.Write))
 			{
-				using (BinaryWriter writer = new BinaryWriter(stream))
+				// using (DeflateStream compressor = new DeflateStream(stream, CompressionLevel.SmallestSize))
 				{
-					writer.Write(SaveFileMagicNumber);
-					writer.Write((byte)0);
-					writer.Write(EditorApplication.State.Animator.FPS);
-					writer.Write(EditorApplication.State.Animator.CurrentKeyframe);
-
-					writer.Write(EditorApplication.State.Textures.Count);
-
-					foreach (TextureFrame texture in EditorApplication.State.Textures.Values)
+					using (Utf8JsonWriter writer = new Utf8JsonWriter(stream, DefaultWriterOptions))
 					{
-						texture.Save(writer);
-					}
+						writer.WriteStartObject();
+						
+						writer.WriteStartObject("main_data");
+						writer.WriteNumber("save_version", 0);
+						writer.WriteNumber("animator_fps", EditorApplication.State.Animator.FPS);
+						writer.WriteNumber("saved_keyframe", EditorApplication.State.Animator.CurrentKeyframe);
+						writer.WriteEndObject();
 
-					writer.Write(EditorApplication.State.GraphicEntities.Count);
+						writer.WriteStartArray("texture_frames");
 
-					foreach (TextureAnimationObject entity in EditorApplication.State.Animator.RegisteredGraphics)
-					{
-						entity.Save(writer);
-					}
+						foreach (TextureFrame texture in EditorApplication.State.Textures.Values)
+						{
+							texture.Save(writer);
+						}
 
-					writer.Write(EditorApplication.State.HitboxEntities.Count);
+						writer.WriteEndArray();
 
-					foreach (HitboxAnimationObject entity in EditorApplication.State.Animator.RegisteredHitboxes)
-					{
-						entity.Save(writer);
+						writer.WriteStartArray("graphic_objects");
+
+						foreach (TextureAnimationObject entity in EditorApplication.State.Animator.RegisteredGraphics)
+						{
+							entity.Save(writer);
+						}
+
+						writer.WriteEndArray();
+
+						writer.WriteStartArray("hitbox_objects");
+
+						foreach (HitboxAnimationObject entity in EditorApplication.State.Animator.RegisteredHitboxes)
+						{
+							entity.Save(writer);
+						}
+
+						writer.WriteEndArray();
+						writer.WriteEndObject();
+						
+						writer.Flush();
+						writer.Reset();
 					}
 				}
 			}

@@ -658,12 +658,17 @@ namespace Editor.Gui
 					if (ImGui.DragFloat2("Size", ref newValue))
 						hitboxObject.Size = newValue;
 
-					if (ImGui.DragInt("Frame start", ref hitboxObject.SpawnFrame))
-					{
-					}
-
 					unsafe
 					{
+						handle = GCHandle.Alloc(hitboxObject.SpawnFrame, GCHandleType.Pinned);
+
+						if (ImGui.DragScalar("Frame start", ImGuiDataType.U16, handle.AddrOfPinnedObject())) ;
+						{
+							hitboxObject.SpawnFrame = *(ushort*)handle.AddrOfPinnedObject();
+						}
+
+						handle.Free();
+
 						handle = GCHandle.Alloc(hitboxObject.FrameDuration, GCHandleType.Pinned);
 
 						if (ImGui.DragScalar("Frame duration", ImGuiDataType.U16, handle.AddrOfPinnedObject()))
@@ -754,7 +759,7 @@ namespace Editor.Gui
 					{
 						if (ImGui.IsWindowHovered())
 						{
-							ImGui.SetItemKeyOwner(ImGuiKey.MouseWheelY);  // this doesnt work :(
+							ImGui.SetItemKeyOwner(ImGuiKey.MouseWheelY); // this doesnt work :(
 
 							if (ImGui.IsMouseDragging(ImGuiMouseButton.Left))
 							{

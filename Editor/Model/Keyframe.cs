@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Linq;
+using System.Text.Json.Serialization;
 #endregion
 
 namespace Editor.Model
@@ -14,9 +15,11 @@ namespace Editor.Model
 	[DebuggerDisplay("Frame = {Frame}, Value = {Value}")]
 	public class Keyframe : IComparable<Keyframe>
 	{
+		[JsonIgnore]
 		public readonly KeyframeableValue ContainingValue;
 		private int _frame;
 		private object _value;
+		[JsonIgnore]
 		public KeyframeLink ContainingLink;
 
 		public Keyframe(KeyframeableValue containingValue, int frame, object data)
@@ -54,13 +57,14 @@ namespace Editor.Model
 	public class KeyframeLink : IEnumerable<Keyframe>
 	{
 		public readonly ImmutableSortedSet<Keyframe> Keyframes;
-		public readonly KeyframeableValue linkedValue;
+		[JsonIgnore]
+		public readonly KeyframeableValue ContainingValue;
 		private InterpolationType _interpolationType;
 		public bool UseRelativeProgressCalculation = true;
 
-		public KeyframeLink(KeyframeableValue linkedValue, IEnumerable<Keyframe> keyframes)
+		public KeyframeLink(KeyframeableValue containingValue, IEnumerable<Keyframe> keyframes)
 		{
-			this.linkedValue = linkedValue;
+			this.ContainingValue = containingValue;
 			Keyframes = keyframes.ToImmutableSortedSet(); // ????
 
 			InterpolationType = InterpolationType.Lineal;
@@ -93,12 +97,12 @@ namespace Editor.Model
 
 		public KeyframeLink Add(Keyframe keyframe)
 		{
-			return new KeyframeLink(linkedValue, Keyframes.Add(keyframe));
+			return new KeyframeLink(ContainingValue, Keyframes.Add(keyframe));
 		}
 
 		public KeyframeLink Remove(Keyframe keyframe)
 		{
-			return new KeyframeLink(linkedValue, Keyframes.Remove(keyframe));
+			return new KeyframeLink(ContainingValue, Keyframes.Remove(keyframe));
 		}
 
 		public void ChangedFrame(Keyframe keyframe)

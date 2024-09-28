@@ -5,6 +5,8 @@ using Microsoft.Xna.Framework;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Editor.Model
 {
@@ -36,16 +38,14 @@ namespace Editor.Model
 		}
 
 		public HitboxConditions Conditions;
-		public ushort Hitstun, MaxHitstun, ShieldStun, DuelGameLag, AttackId, ImmunityAfterHit, Priority;
+		public ushort Hitstun, MaxHitstun, ShieldStun, DuelGameLag, AttackId, ImmunityAfterHit, Priority, FrameDuration, SpawnFrame;
 		public float Damage, HitstunGrowth, LaunchAngle, LaunchPotency, LaunchPotencyGrowth, LaunchPotencyMax, ShieldLaunchAngle, ShieldPotency;
 		public Vector2 Size { get; set; }
 		public string Name { get; set; }
 		public Vector2 Position { get; set; }
-		public int SpawnFrame;
-		public ushort FrameDuration;
+		public HitboxType Type;
 		public List<string> Tags = new List<string>();
 		public int EndFrame => SpawnFrame + FrameDuration;
-		public HitboxType Type;
 
 		public bool IsBeingHovered(Vector2 mouseWorld, int frame)
 		{
@@ -91,27 +91,50 @@ namespace Editor.Model
 			return Timeline.HitboxMode ? color : color.MultiplyAlpha(0.2f);
 		}
 
-		public void Save(BinaryWriter writer)
+		public void Save(Utf8JsonWriter writer)
 		{
-			writer.Write(Name);
-			writer.Write(SpawnFrame);
-			writer.Write(FrameDuration);
-			writer.Write(Position);
-			writer.Write(Size);
-			writer.Write(Tags.Count);
-			writer.Write((byte)Type);
+			/*writer.WriteStartObject();
+			writer.WriteString("name", Name);
+			writer.WriteVector2("position", Position);
+			writer.WriteVector2("size", Size);
+			writer.WriteEnum("hitbox_type", Type);
+			writer.WriteNumber("spawn_frame", SpawnFrame);
+			writer.WriteNumber("frame_duration", FrameDuration);
+			writer.WriteNumber("damage", Damage);
+			writer.WriteNumber("hitsun", Hitstun);
+			writer.WriteNumber("hitstun_growth", HitstunGrowth);
+			writer.WriteNumber("max_hitstun", MaxHitstun);
+			writer.WriteNumber("launch_angle", LaunchAngle);
+			writer.WriteNumber("launch_potency", LaunchPotency);
+			writer.WriteNumber("launch_potency_growth", LaunchPotencyGrowth);
+			writer.WriteNumber("launch_potency_max", LaunchPotencyMax);
+			writer.WriteNumber("shield_stun", ShieldStun);
+			writer.WriteNumber("1v1_lag", DuelGameLag);
+			writer.WriteEnum("conditions", Conditions);
+			writer.WriteNumber("attack_id", AttackId);
+			writer.WriteNumber("immunity_after_hit", ImmunityAfterHit);
+			writer.WriteNumber("shield_launch_angle", ShieldLaunchAngle);
+			writer.WriteNumber("shield_potency", ShieldPotency);
+			writer.WriteNumber("priority", Priority);
+
+			writer.WriteStartArray("tags");
 
 			foreach (string tag in Tags)
 			{
-				writer.Write(tag);
+				writer.WriteStringValue(tag);
 			}
+
+			writer.WriteEndArray();
+			
+			writer.WriteEndObject();*/
+			writer.WriteRawValue(JsonSerializer.SerializeToUtf8Bytes(this, SettingsManager.DefaultSerializerOptions));
 		}
 
 		public static HitboxAnimationObject Load(BinaryReader reader)
 		{
 			string name = reader.ReadString();
 			HitboxAnimationObject hitbox = new HitboxAnimationObject(name);
-			hitbox.SpawnFrame = reader.ReadInt32();
+			hitbox.SpawnFrame = (ushort)reader.ReadInt32();
 			hitbox.FrameDuration = reader.ReadUInt16();
 			hitbox.Position = reader.ReadVector2();
 			hitbox.Size = reader.ReadVector2();

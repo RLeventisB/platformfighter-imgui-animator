@@ -1,8 +1,12 @@
-﻿using Microsoft.Xna.Framework.Graphics;
+﻿using Editor.Gui;
+
+using Microsoft.Xna.Framework.Graphics;
 
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Editor.Model
 {
@@ -144,6 +148,7 @@ namespace Editor.Model
 		public int Width => Texture.Width;
 		public int Height => Texture.Height;
 		public Texture2D Texture => EditorApplication.ImguiRenderer.GetTexture(TextureId);
+		[JsonIgnore]
 		public nint TextureId { get; private set; }
 
 		public static implicit operator Texture2D(TextureFrame f)
@@ -173,13 +178,9 @@ namespace Editor.Model
 				TextureManager.UnloadTexture(Path);
 		}
 
-		public void Save(BinaryWriter writer)
+		public void Save(Utf8JsonWriter writer)
 		{
-			writer.Write(Name);
-			writer.Write(Path);
-			writer.Write(FrameSize);
-			writer.Write(FramePosition);
-			writer.Write(Pivot);
+			writer.WriteRawValue(JsonSerializer.SerializeToUtf8Bytes(this, SettingsManager.DefaultSerializerOptions));
 		}
 
 		public static TextureFrame Load(BinaryReader reader)

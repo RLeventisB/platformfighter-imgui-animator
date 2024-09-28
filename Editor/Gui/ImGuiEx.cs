@@ -8,6 +8,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.Json;
 
 namespace Editor.Gui
 {
@@ -184,6 +185,50 @@ namespace Editor.Gui
 		public static Vector2 ReadVector2(this BinaryReader reader)
 		{
 			return new Vector2(reader.ReadSingle(), reader.ReadSingle());
+		}
+
+		public static void WriteVector2(this Utf8JsonWriter writer, string propertyName, Vector2 vector2)
+		{
+			writer.WritePropertyName(propertyName);
+			writer.WriteStartObject();
+			writer.WriteNumber("x", vector2.X);
+			writer.WriteNumber("y", vector2.Y);
+			writer.WriteEndObject();
+		}
+
+		public static void WritePoint(this Utf8JsonWriter writer, string propertyName, Point point)
+		{
+			writer.WritePropertyName(propertyName);
+			writer.WriteStartObject();
+			writer.WriteNumber("x", point.X);
+			writer.WriteNumber("y", point.Y);
+			writer.WriteEndObject();
+		}
+
+		public static void WriteNVector2(this Utf8JsonWriter writer, string propertyName, NVector2 vector2)
+		{
+			writer.WritePropertyName(propertyName);
+			writer.WriteStartObject();
+			writer.WriteNumber("x", vector2.X);
+			writer.WriteNumber("y", vector2.Y);
+			writer.WriteEndObject();
+		}
+
+		public static void WriteEnum<T>(this Utf8JsonWriter writer, string propertyName, T value) where T : struct, Enum
+		{
+			writer.WriteString(propertyName, Enum.GetName(value) ?? string.Empty);
+		}
+
+		public static T? ReadEnum<T>(this Utf8JsonReader reader, string propertyName, T value) where T : struct, Enum
+		{
+			if (reader.GetString()!.Equals(propertyName))
+			{
+				reader.Read();
+
+				return Enum.Parse<T>(reader.GetString()!);
+			}
+
+			return null;
 		}
 
 		public static float InverseLerp(float value, float min, float max)

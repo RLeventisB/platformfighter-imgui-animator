@@ -7,6 +7,7 @@ using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text.Json.Serialization;
 
 namespace Editor.Model
 {
@@ -131,7 +132,9 @@ namespace Editor.Model
 		public readonly List<Keyframe> keyframes;
 		public readonly List<KeyframeLink> links;
 		public readonly ImmutableArray<string> tags;
+		[JsonIgnore]
 		public readonly Type type;
+		[JsonIgnore]
 		protected (object value, int frame) cachedValue;
 
 		protected KeyframeableValue(TextureAnimationObject animationObject, object defaultValue, string name, Type type, string[] tags)
@@ -151,7 +154,9 @@ namespace Editor.Model
 			links = new List<KeyframeLink>();
 		}
 
+		[JsonIgnore]
 		public TextureAnimationObject Owner { get; init; }
+		[JsonIgnore]
 		public string Name { get; init; }
 		public ref Keyframe this[int index] => ref CollectionsMarshal.AsSpan(keyframes)[index];
 		public int KeyframeCount => keyframes.Count;
