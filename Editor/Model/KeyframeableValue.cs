@@ -43,17 +43,6 @@ namespace Editor.Model
 			Interpolate(this, frame, Vector2Interpolator, out object value);
 			cachedValue = (value, frame);
 		}
-
-		public virtual KeyframeableValue Clone()
-		{
-			return new Vector2KeyframeValue(Owner, (Vector2)DefaultValue, Name, false)
-			{
-				DefaultValue = DefaultValue,
-				keyframes = keyframes.ToList(),
-				links = links.ToList(),
-				tags = tags.ToList()
-			}.CloneKeyframeData(this).AddTags(tags);
-		}
 	}
 	public class FloatKeyframeValue : KeyframeableValue
 	{
@@ -139,7 +128,7 @@ namespace Editor.Model
 			(fraction, first, second) => first + (second - first) * fraction,
 			(fraction, values) => InterpolateCatmullRom(values, fraction * (values.Length - 1)));
 
-		[JsonInclude]
+		[JsonIgnore]
 		public object DefaultValue;
 
 		[JsonInclude]

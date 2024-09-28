@@ -451,24 +451,8 @@ namespace Editor
 					{
 						Keyframe keyframe = Timeline.selectedLink.link.Keyframes[index];
 						float rotation = ((float[])Timeline.selectedLink.extraData)[index];
-
-						Vector2 position = Camera.WorldToScreen((Vector2)keyframe.Value);
-						bool hover = IsInsideRectangle(position, new Vector2(10), ImGui.GetMousePos());
-						RenderRotationIcon(drawList, position, rotation);
-						drawList.AddNgon(new NVector2(position.X, position.Y), 10, hover ? 0xCCCCCCCC : 0x77777777, 4);
-
-						if (hover && ImGui.IsMouseClicked(ImGuiMouseButton.Left) && currentDragAction is null)
-						{
-							State.Animator.CurrentKeyframe = keyframe.Frame;
-							State.Animator.Stop();
-							SetDragAction(new DelegateDragAction("DragRotationKeyframe",
-								delegate
-								{
-									Vector2 diff = Input.MouseWorld - position;
-									keyframe.Value = Math.Atan2(diff.Y, diff.X);
-									Timeline.selectedLink.CalculateExtraData();
-								}));
-						}
+						
+						// TODO: implement
 					}
 
 					break;

@@ -5,6 +5,7 @@ using ImGuiNET;
 using System;
 using System.Collections;
 using System.IO;
+using System.IO.Compression;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -52,6 +53,7 @@ namespace Editor.Gui
 		public static BoolSetting PlayOnKeyframeSelect = new BoolSetting(4, "Reproducir al seleccionar keyframe");
 		public static BoolSetting LockToolWindows = new BoolSetting(5, "Fijar la posicion y tamaño de las ventanas de herramientas");
 		public static BoolSetting SetKeyframeOnModify = new BoolSetting(6, "Al cambiar un valor, asignar instantaneamente el valor al keyframe");
+		public static BoolSetting CompressOnSave = new BoolSetting(7, "Comprimir el proyecto al guardar");
 		public static string lastProjectSavePath;
 		public static BoolSetting[] Settings =>
 		[
@@ -61,7 +63,8 @@ namespace Editor.Gui
 			ShowNewFrameUponMovingKeyframes,
 			PlayOnKeyframeSelect,
 			LockToolWindows,
-			SetKeyframeOnModify
+			SetKeyframeOnModify,
+			CompressOnSave
 		];
 
 		public static void LoadProject(string filePath)
@@ -69,124 +72,51 @@ namespace Editor.Gui
 			try
 			{
 				byte[] text = File.ReadAllBytes(filePath);
+
+				if (BitConverter.ToUInt16(text, 0) == 0x9DD5) // file is compressed
+				{
+					using (MemoryStream stream = new MemoryStream(text))
+					using (DeflateStream deflateStream = new DeflateStream(stream, CompressionMode.Decompress))
+					{
+						using (MemoryStream outputStream = new MemoryStream())
+						{
+							deflateStream.CopyTo(outputStream);
+							text = outputStream.GetBuffer();
+						}
+					}
+				}
 				JsonData data = JsonSerializer.Deserialize<JsonData>(text, DefaultSerializerOptions);
 
 				EditorApplication.ApplyJsonData(data);
-				return;
 			}
 			catch (Exception e)
 			{
 				Console.WriteLine(e);
 			}
-
-			using (FileStream stream = File.OpenRead(filePath))
-			{
-				using (BinaryReader reader = new BinaryReader(stream))
-				{
-					if (stream.Length > 4 && reader.ReadUInt32() == SaveFileMagicNumber)
-					{
-						EditorApplication.ResetEditor();
-
-						int counter;
-
-						switch (reader.ReadByte())
-						{
-							default:
-							case 0:
-								EditorApplication.State.Animator.FPS = reader.ReadInt32();
-								EditorApplication.State.Animator.CurrentKeyframe = reader.ReadInt32();
-
-								counter = reader.ReadInt32();
-								EditorApplication.State.Textures.EnsureCapacity(counter);
-
-								for (int i = 0; i < counter; i++)
-								{
-									TextureFrame frame = TextureFrame.Load(reader);
-
-									EditorApplication.State.Textures.Add(frame.Name, frame);
-								}
-
-								counter = reader.ReadInt32();
-								EditorApplication.State.GraphicEntities.EnsureCapacity(counter);
-
-								for (int i = 0; i < counter; i++)
-								{
-									TextureAnimationObject animationObject = TextureAnimationObject.Load(reader);
-
-									EditorApplication.State.GraphicEntities.Add(animationObject.Name, animationObject);
-								}
-
-								counter = reader.ReadInt32();
-								EditorApplication.State.HitboxEntities.EnsureCapacity(counter);
-
-								for (int i = 0; i < counter; i++)
-								{
-									HitboxAnimationObject hitboxObject = HitboxAnimationObject.Load(reader);
-
-									EditorApplication.State.HitboxEntities.Add(hitboxObject.Name, hitboxObject);
-								}
-
-								break;
-						}
-
-						EditorApplication.State.Animator.OnKeyframeChanged?.Invoke();
-					}
-				}
-			}
-
 			lastProjectSavePath = filePath;
 		}
 
 		public static void SaveProject(string filePath)
 		{
+			if(File.Exists(filePath))
+				File.Delete(filePath);
+			
 			using (FileStream stream = File.Open(filePath, FileMode.OpenOrCreate, FileAccess.Write))
 			{
-				// using (DeflateStream compressor = new DeflateStream(stream, CompressionLevel.SmallestSize))
+				stream.Seek(0, SeekOrigin.Begin);
+				byte[] serializedJson = JsonSerializer.SerializeToUtf8Bytes(EditorApplication.GetJsonObject(), DefaultSerializerOptions);
+
+				if (CompressOnSave)
 				{
-					stream.Write(JsonSerializer.SerializeToUtf8Bytes(EditorApplication.GetJsonObject(), DefaultSerializerOptions));
-					/*
-					using (Utf8JsonWriter writer = new Utf8JsonWriter(stream, DefaultWriterOptions))
+					// todo: fix the identifier thingy not working for gods sake
+					using (DeflateStream compressor = new DeflateStream(stream, CompressionLevel.SmallestSize))
 					{
-						writer.WriteStartObject();
-
-
-						writer.WriteStartObject("main_data");
-						writer.WriteNumber("save_version", 0);
-						writer.WriteNumber("animator_fps", EditorApplication.State.Animator.FPS);
-						writer.WriteNumber("saved_keyframe", EditorApplication.State.Animator.CurrentKeyframe);
-						writer.WriteEndObject();
-
-						writer.WriteStartArray("texture_frames");
-
-						foreach (TextureFrame texture in EditorApplication.State.Textures.Values)
-						{
-							texture.Save(writer);
-						}
-
-						writer.WriteEndArray();
-
-						writer.WriteStartArray("graphic_objects");
-
-						foreach (TextureAnimationObject entity in EditorApplication.State.Animator.RegisteredGraphics)
-						{
-							entity.Save(writer);
-						}
-
-						writer.WriteEndArray();
-
-						writer.WriteStartArray("hitbox_objects");
-
-						foreach (HitboxAnimationObject entity in EditorApplication.State.Animator.RegisteredHitboxes)
-						{
-							entity.Save(writer);
-						}
-
-						writer.WriteEndArray();
-						writer.WriteEndObject();
-
-						writer.Flush();
-						writer.Reset();
-					}*/
+						compressor.Write(serializedJson);
+					}
+				}
+				else
+				{
+					stream.Write(serializedJson);
 				}
 			}
 
@@ -204,6 +134,7 @@ namespace Editor.Gui
 			PlayOnKeyframeSelect.Set(true);
 			LockToolWindows.Set(false);
 			SetKeyframeOnModify.Set(false);
+			CompressOnSave.Set(true);
 
 			if (!File.Exists("./settings.dat"))
 				return;

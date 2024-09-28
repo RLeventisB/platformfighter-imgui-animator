@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading;
 
 namespace Editor.Model
 {
@@ -88,13 +89,16 @@ namespace Editor.Model
 
 			public void ReloadTexture(object sender, FileSystemEventArgs args)
 			{
-				Texture2D texture = EditorApplication.ImguiRenderer.GetTexture(ImguiId);
-				EditorApplication.ImguiRenderer.UnbindTexture(ImguiId);
-				texture.Dispose();
+				lock (EditorApplication.ImguiRenderer.loadedTextures)
+				{
+					Texture2D texture = EditorApplication.ImguiRenderer.GetTexture(ImguiId);
+					EditorApplication.ImguiRenderer.UnbindTexture(ImguiId);
+					texture.Dispose();
 
-				texture = Texture2D.FromFile(EditorApplication.Graphics, Path);
+					texture = Texture2D.FromFile(EditorApplication.Graphics, Path);
 
-				EditorApplication.ImguiRenderer.loadedTextures[ImguiId] = texture;
+					EditorApplication.ImguiRenderer.loadedTextures[ImguiId] = texture;
+				}
 			}
 
 			public void Dispose()
