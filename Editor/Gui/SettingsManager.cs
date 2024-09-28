@@ -2,9 +2,9 @@
 
 using ImGuiNET;
 
+using System;
 using System.Collections;
 using System.IO;
-using System.IO.Compression;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -27,9 +27,9 @@ namespace Editor.Gui
 			AllowTrailingCommas = true,
 			IncludeFields = true,
 			WriteIndented = true,
-			ReferenceHandler = ReferenceHandler.IgnoreCycles,
+			ReferenceHandler = ReferenceHandler.Preserve,
 			IgnoreReadOnlyFields = true,
-			IgnoreReadOnlyProperties = true
+			IgnoreReadOnlyProperties = true,
 		};
 
 		public static ImGuiWindowFlags ToolsWindowFlags => LockToolWindows ? ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoDocking : ImGuiWindowFlags.None;
@@ -66,14 +66,24 @@ namespace Editor.Gui
 
 		public static void LoadProject(string filePath)
 		{
-			/*				byte[] text = File.ReadAllBytes(filePath);
-				Utf8JsonReader reader = new Utf8JsonReader(text.AsSpan(), DefaultReaderOptions);
-*/
+			try
+			{
+				byte[] text = File.ReadAllBytes(filePath);
+				JsonData data = JsonSerializer.Deserialize<JsonData>(text, DefaultSerializerOptions);
+
+				EditorApplication.ApplyJsonData(data);
+				return;
+			}
+			catch (Exception e)
+			{
+				Console.WriteLine(e);
+			}
+
 			using (FileStream stream = File.OpenRead(filePath))
 			{
 				using (BinaryReader reader = new BinaryReader(stream))
 				{
-					if (reader.ReadUInt32() == SaveFileMagicNumber)
+					if (stream.Length > 4 && reader.ReadUInt32() == SaveFileMagicNumber)
 					{
 						EditorApplication.ResetEditor();
 
@@ -133,10 +143,13 @@ namespace Editor.Gui
 			{
 				// using (DeflateStream compressor = new DeflateStream(stream, CompressionLevel.SmallestSize))
 				{
+					stream.Write(JsonSerializer.SerializeToUtf8Bytes(EditorApplication.GetJsonObject(), DefaultSerializerOptions));
+					/*
 					using (Utf8JsonWriter writer = new Utf8JsonWriter(stream, DefaultWriterOptions))
 					{
 						writer.WriteStartObject();
-						
+
+
 						writer.WriteStartObject("main_data");
 						writer.WriteNumber("save_version", 0);
 						writer.WriteNumber("animator_fps", EditorApplication.State.Animator.FPS);
@@ -170,10 +183,10 @@ namespace Editor.Gui
 
 						writer.WriteEndArray();
 						writer.WriteEndObject();
-						
+
 						writer.Flush();
 						writer.Reset();
-					}
+					}*/
 				}
 			}
 

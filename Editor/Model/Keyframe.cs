@@ -15,13 +15,18 @@ namespace Editor.Model
 	[DebuggerDisplay("Frame = {Frame}, Value = {Value}")]
 	public class Keyframe : IComparable<Keyframe>
 	{
-		[JsonIgnore]
-		public readonly KeyframeableValue ContainingValue;
+		public KeyframeableValue ContainingValue;
 		private int _frame;
 		private object _value;
-		[JsonIgnore]
+		[JsonInclude]
 		public KeyframeLink ContainingLink;
 
+		[JsonConstructor]
+		public Keyframe()
+		{
+			Frame = -1;
+			Value = null;
+		}
 		public Keyframe(KeyframeableValue containingValue, int frame, object data)
 		{
 			ContainingValue = containingValue;
@@ -54,23 +59,37 @@ namespace Editor.Model
 
 		public override int GetHashCode() => Value.GetType().GetHashCode() ^ Frame;
 	}
-	public class KeyframeLink : IEnumerable<Keyframe>
+	public class KeyframeLink : ICollection<Keyframe>
 	{
-		public readonly ImmutableSortedSet<Keyframe> Keyframes;
-		[JsonIgnore]
-		public readonly KeyframeableValue ContainingValue;
+		private List<Keyframe> _keyframes;
+		public IReadOnlyList<Keyframe> Keyframes => _keyframes;
+		public KeyframeableValue ContainingValue;
 		private InterpolationType _interpolationType;
 		public bool UseRelativeProgressCalculation = true;
 
-		public KeyframeLink(KeyframeableValue containingValue, IEnumerable<Keyframe> keyframes)
+		[JsonConstructor]
+		public KeyframeLink()
 		{
-			this.ContainingValue = containingValue;
-			Keyframes = keyframes.ToImmutableSortedSet(); // ????
+			_keyframes = new List<Keyframe>();
+			InterpolationType = InterpolationType.Lineal;
+		}
+		public KeyframeLink(KeyframeableValue containingValue, IEnumerable<Keyframe> keyframes) : this()
+		{
+			ContainingValue = containingValue;
+			AddRange(keyframes);
+			_keyframes.Sort();
 
 			InterpolationType = InterpolationType.Lineal;
 		}
 
-		public Keyframe this[int index] => GetAt(index);
+		private void AddRange(IEnumerable<Keyframe> keyframes)
+		{
+			_keyframes.AddRange(keyframes);
+			_keyframes.Sort();
+		}
+
+		public Keyframe this[int index] => _keyframes[index];
+		[JsonIgnore]
 		public InterpolationType InterpolationType
 		{
 			get => _interpolationType;
@@ -84,27 +103,43 @@ namespace Editor.Model
 				}
 			}
 		}
-		public int Length => Keyframes.Count;
-		public Keyframe FirstKeyframe => Keyframes.FirstOrDefault((Keyframe)null);
-		public Keyframe LastKeyframe => Keyframes.LastOrDefault((Keyframe)null);
+		public int Count => Keyframes.Count;
+		public Keyframe FirstKeyframe => Keyframes.FirstOrDefault(-1);
+		public Keyframe LastKeyframe => Keyframes.LastOrDefault(1);
 
-		public Keyframe GetKeyframeClamped(int index) => Length== 0 ? null : Keyframes[Math.Clamp(index, 0, Length - 1)];
+		public Keyframe GetKeyframeClamped(int index) => Count== 0 ? null : Keyframes[Math.Clamp(index, 0, Count - 1)];
 		public IEnumerator<Keyframe> GetEnumerator() => Keyframes.ToList().GetEnumerator();
 
 		IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
-		public Keyframe GetAt(int index) => Keyframes[index];
+		public Keyframe GetAt(int index) => ContainingValue.GetKeyframeReferenceAt(index);
 
-		public KeyframeLink Add(Keyframe keyframe)
+		public void Clear()
 		{
-			return new KeyframeLink(ContainingValue, Keyframes.Add(keyframe));
+			throw new NotSupportedException();
 		}
 
-		public KeyframeLink Remove(Keyframe keyframe)
+		public bool Contains(Keyframe item) => throw new NotSupportedException();
+
+		public void CopyTo(Keyframe[] array, int arrayIndex)
 		{
-			return new KeyframeLink(ContainingValue, Keyframes.Remove(keyframe));
+			_keyframes.CopyTo(array, arrayIndex);
 		}
 
+		public bool IsReadOnly => false;
+
+		public void Add(Keyframe item)
+		{
+			_keyframes.Add(item);
+			_keyframes.Sort();
+		}
+
+		public bool Remove(Keyframe item)
+		{
+			bool remove = _keyframes.Remove(item);
+			_keyframes.Sort();
+			return remove;
+		}
 		public void ChangedFrame(Keyframe keyframe)
 		{
 		}

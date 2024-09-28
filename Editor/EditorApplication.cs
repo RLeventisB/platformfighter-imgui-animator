@@ -22,8 +22,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 using Vector3 = Microsoft.Xna.Framework.Vector3;
 
@@ -125,6 +126,11 @@ namespace Editor
 
 		public static void ResetEditor()
 		{
+			if(State?.Textures != null)
+			foreach (TextureFrame texture in State.Textures.Values)
+			{
+				texture.Remove();
+			}
 			State = new State();
 
 			InitializeDefaultState(State);
@@ -306,19 +312,7 @@ namespace Editor
 				Camera.View;
 
 			spriteBatch.Begin(SpriteSortMode.FrontToBack, BlendState.NonPremultiplied, SamplerState.PointClamp, null, null, null, spriteBatchTransformation);
-			// FieldInfo spriteEffectInfo = typeof(SpriteBatch).GetField("_spriteEffect", BindingFlags.Instance | BindingFlags.NonPublic);
-			// FieldInfo matrixParamInfo = typeof(SpriteEffect).GetField("_matrixParam", BindingFlags.Instance | BindingFlags.NonPublic);
-			// FieldInfo projectionInfo = typeof(SpriteEffect).GetField("_projection", BindingFlags.Instance | BindingFlags.NonPublic);
-
-			// SpriteEffect effect = (SpriteEffect)spriteEffectInfo.GetValue(spriteBatch);
-			// EffectParameter parameter = (EffectParameter)matrixParamInfo.GetValue(effect);
-
-			// parameter.SetValue(spriteBatchTransformation * Camera.Projection);
-
-			// projectionInfo.SetValue(effect, (Camera.Projection));
-			// matrixParamInfo.SetValue(effect, parameter);
-			// spriteEffectInfo.SetValue(spriteBatch, effect);
-
+			
 			foreach (TextureAnimationObject entity in State.GraphicEntities.Values)
 			{
 				Color color = new Color(1f, 1f, 1f, entity.Transparency.CachedValue);
@@ -375,7 +369,7 @@ namespace Editor
 			Vector2 position = textureAnimationObject.Position.CachedValue;
 			Vector2 scale = textureAnimationObject.Scale.CachedValue;
 			float rotation = textureAnimationObject.Rotation.CachedValue;
-			
+
 			(Vector3 tl, Vector3 tr, Vector3 bl, Vector3 br) = GetQuads(position.X, position.Y, -texture.Pivot.X * scale.X, -texture.Pivot.Y * scale.Y, texture.FrameSize.X * scale.X, texture.FrameSize.Y * scale.Y, MathF.Sin(rotation), MathF.Cos(rotation));
 			primitiveBatch.DrawPolygon([tl, tr, br, bl], color);
 		}
@@ -553,6 +547,93 @@ namespace Editor
 			}
 
 			currentDragAction = action;
+		}
+
+		public static JsonData GetJsonObject()
+		{
+			return new JsonData(State.Animator.FPS, State.Animator.CurrentKeyframe, State.Textures.Values.ToArray(), State.GraphicEntities.Values.ToArray(), State.HitboxEntities.Values.ToArray());
+		}
+
+		public static void ApplyJsonData(JsonData data)
+		{
+			ResetEditor();
+			foreach (TextureFrame texture in data.textures)
+			{
+				texture.LoadTexture();
+				State.Textures.Add(texture.Name, texture);
+			}
+
+			List<Keyframe> keyframesToResolve = new List<Keyframe>(); // since json loads objects as JsonElements :(
+			foreach (TextureAnimationObject graphicObject in data.graphicObjects)
+			{
+				State.GraphicEntities.Add(graphicObject.Name, graphicObject);
+				foreach(var keyframeableValue in graphicObject.EnumerateKeyframeableValues())
+				{
+					foreach (KeyframeLink link in keyframeableValue.links)
+					{
+						link.ContainingValue = keyframeableValue;
+						foreach (Keyframe keyframe in link.Keyframes) // sometimes keyframes dont store their containing link so fixup!!
+						{
+							keyframe.ContainingLink = link;
+						}
+					}
+
+					keyframesToResolve.AddRange(keyframeableValue.keyframes);
+				}
+			}
+			foreach (HitboxAnimationObject hitboxObject in data.hitboxObjects)
+			{
+				State.HitboxEntities.Add(hitboxObject.Name, hitboxObject);
+				foreach(var keyframeableValue in hitboxObject.EnumerateKeyframeableValues())
+				{
+					foreach (KeyframeLink link in keyframeableValue.links)
+					{
+						link.ContainingValue = keyframeableValue;
+
+						foreach (Keyframe keyframe in link.Keyframes) // sometimes keyframes dont store their containing link so fixup!!
+						{
+							keyframe.ContainingLink = link;
+						}
+					}
+					keyframesToResolve.AddRange(keyframeableValue.keyframes);
+				}
+			}
+
+			foreach (Keyframe keyframe in keyframesToResolve)
+			{
+				if (keyframe.Value is not JsonElement element)
+					continue;
+
+				try
+				{
+					switch (keyframe.ContainingValue)
+					{
+						case Vector2KeyframeValue:
+							keyframe.Value = new Vector2(element.GetProperty("x").GetSingle(), element.GetProperty("y").GetSingle());
+							break;
+						case IntKeyframeValue:
+							keyframe.Value = element.GetInt32();
+							break;
+						case FloatKeyframeValue:
+							keyframe.Value = element.GetSingle();
+							break;
+					}
+				}
+				catch (Exception e) // we are COOKED
+				{
+					Console.WriteLine(e);
+				}
+			}
+			State.Animator.FPS = data.selectedFps;
+			State.Animator.CurrentKeyframe = 0;
+			State.Animator.CurrentKeyframe = data.currentKeyframe;
+		}
+	}
+	public record JsonData(int selectedFps, int currentKeyframe, TextureFrame[] textures, TextureAnimationObject[] graphicObjects, HitboxAnimationObject[] hitboxObjects)
+	{
+		[JsonConstructor]
+		public JsonData() : this(0, 0, Array.Empty<TextureFrame>(), Array.Empty<TextureAnimationObject>(), Array.Empty<HitboxAnimationObject>())
+		{
 		}
 	}
 	public record SelectedLinkData

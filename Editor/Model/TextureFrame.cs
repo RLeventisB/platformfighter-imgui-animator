@@ -112,28 +112,26 @@ namespace Editor.Model
 		public Point FrameSize { get; set; }
 		public Point FramePosition { get; set; }
 
+		[JsonConstructor]
+		public TextureFrame()
+		{
+			Name = null;
+			Path = null;
+			FrameSize = Point.Zero;
+			FramePosition = Point.Zero;
+			Pivot = NVector2.One;
+		}
+
 		public TextureFrame(string name, string path, Point? frameSize = null, Point? framePosition = null, NVector2? pivot = null)
 		{
 			Name = name;
 			Path = path;
+			LoadTexture();
 			FrameSize = frameSize ?? new Point(Texture.Width, Texture.Height);
 			FramePosition = framePosition ?? Point.Zero;
 			Pivot = pivot ?? new NVector2(Texture.Width / 2f, Texture.Height / 2f);
-			TextureManager.LoadTexture(path, out nint id);
-			TextureId = id;
 		}
-
-		private void ReloadTexture(object sender, FileSystemEventArgs e)
-		{
-			if (e.FullPath != Path)
-				return;
-
-			TextureManager.UnloadTexture(Path);
-
-			TextureManager.LoadTexture(Path, out nint id);
-			TextureId = id;
-		}
-
+		
 		public TextureFrame(string name, Texture2D texture, Point frameSize, Point? framePosition = null, NVector2? pivot = null)
 		{
 			Name = name;
@@ -151,6 +149,11 @@ namespace Editor.Model
 		[JsonIgnore]
 		public nint TextureId { get; private set; }
 
+		public void LoadTexture()
+		{
+			TextureManager.LoadTexture(Path, out nint id);
+			TextureId = id;
+		}
 		public static implicit operator Texture2D(TextureFrame f)
 		{
 			return f.Texture;

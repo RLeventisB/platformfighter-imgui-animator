@@ -9,16 +9,31 @@ namespace Editor.Model
 {
 	public class TextureAnimationObject : IAnimationObject
 	{
+		[JsonConstructor]
+		public TextureAnimationObject()
+		{
+			Name = null;
+			TextureName = null;
+
+			Scale = new Vector2KeyframeValue(this, Vector2.One, ScaleProperty, false);
+			FrameIndex = new IntKeyframeValue(this, 0, FrameIndexProperty, false);
+			Rotation = new FloatKeyframeValue(this, 0, RotationProperty, false);
+			Position = new Vector2KeyframeValue(this, Vector2.Zero, PositionProperty, false);
+			Transparency = new FloatKeyframeValue(this, 1, TransparencyProperty, false);
+			ZIndex = new FloatKeyframeValue(this, 0, ZIndexProperty, false);
+		}
+
 		public TextureAnimationObject(string name, string textureName)
 		{
+			Name = name;
+			TextureName = textureName;
+
 			Scale = new Vector2KeyframeValue(this, Vector2.One, ScaleProperty);
 			FrameIndex = new IntKeyframeValue(this, 0, FrameIndexProperty);
 			Rotation = new FloatKeyframeValue(this, 0, RotationProperty);
-			Name = name;
 			Position = new Vector2KeyframeValue(this, Vector2.Zero, PositionProperty);
 			Transparency = new FloatKeyframeValue(this, 1, TransparencyProperty);
 			ZIndex = new FloatKeyframeValue(this, 0, ZIndexProperty);
-			TextureName = textureName;
 		}
 
 		public string TextureName { get; set; }
@@ -43,82 +58,7 @@ namespace Editor.Model
 
 		public void Save(Utf8JsonWriter writer)
 		{
-			//writer.WriteStartObject();
-
 			writer.WriteRawValue(JsonSerializer.SerializeToUtf8Bytes(this, SettingsManager.DefaultSerializerOptions));
-
-			/*writer.WriteString("name", Name);
-			writer.WriteString("texture_name", TextureName);
-
-			writer.WriteStartArray("keyframe_properties");
-
-			foreach (KeyframeableValue value in EnumerateKeyframeableValues())
-			{
-				writer.WriteStartObject();
-
-				writer.WriteString("name", value.Name);
-				writer.WriteString("type", value.GetType().Name);
-
-				writer.WriteStartArray("keyframes");
-
-				foreach (Keyframe keyframe in value.keyframes)
-				{
-					writer.WriteStartObject();
-
-					writer.WriteNumber("frame", keyframe.Frame);
-
-					switch (keyframe.Value)
-					{
-						case float floatValue:
-							writer.WriteNumber("value", floatValue);
-
-							break;
-						case int intValue:
-							writer.WriteNumber("value", intValue);
-
-							break;
-						case Vector2 vector2Value:
-							writer.WriteVector2("value", vector2Value);
-
-							break;
-					}
-
-					writer.WriteEndObject();
-				}
-
-				writer.WriteEndArray();
-
-				writer.WriteStartArray("links");
-
-				foreach (KeyframeLink link in value.links)
-				{
-					writer.WriteStartObject();
-
-					writer.WriteEnum("interpolation_type", link.InterpolationType);
-					writer.WriteBoolean("use_relative", link.UseRelativeProgressCalculation);
-
-					writer.WriteStartArray("link_keyframes");
-
-					foreach (Keyframe linkKeyframes in link.Keyframes)
-					{
-						writer.WriteStartObject();
-						writer.WriteNumber("frame", linkKeyframes.Frame);
-						writer.WriteEndObject();
-					}
-
-					writer.WriteEndArray();
-
-					writer.WriteEndObject();
-				}
-
-				writer.WriteEndArray();
-
-				writer.WriteEndObject();
-			}
-
-			writer.WriteEndArray();
-
-			writer.WriteEndObject();*/
 		}
 
 		public static TextureAnimationObject Load(BinaryReader reader)

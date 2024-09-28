@@ -270,7 +270,7 @@ namespace Editor.Gui
 								*/
 							}
 
-							linkTooltip = $"Link {{{string.Join(", ", link.Keyframes.Select(v => v.Frame.ToString()))}}}\n({link.InterpolationType})";
+							linkTooltip = $"Link {{{string.Join(", ", link.Keyframes.Select(v => v.ToString()))}}}\n({link.InterpolationType})";
 						}
 					}
 

@@ -617,7 +617,7 @@ namespace Editor.Gui
 								float rotation = ((FloatKeyframeValue)keyframeableValue).CachedValue;
 								rotation = MathHelper.ToDegrees(rotation);
 
-								if (ImGui.DragFloat(keyframeableValue.Name, ref rotation, 1f, -360, 360, "%.0f deg", ImGuiSliderFlags.NoRoundToFormat))
+								if (ImGui.DragFloat(keyframeableValue.Name, ref rotation, 1f, float.MinValue, float.MaxValue, "%.0f deg", ImGuiSliderFlags.NoRoundToFormat))
 									keyframeableValue.SetKeyframeValue(EditorApplication.State.Animator.CurrentKeyframe, MathHelper.ToRadians(rotation));
 
 								break;

@@ -12,6 +12,11 @@ namespace Editor.Model
 {
 	public class HitboxAnimationObject : IAnimationObject
 	{
+		[JsonConstructor]
+		public HitboxAnimationObject() : this(null)
+		{
+		}
+
 		public HitboxAnimationObject(string name)
 		{
 			Size = Vector2.One * 16;
@@ -125,7 +130,7 @@ namespace Editor.Model
 			}
 
 			writer.WriteEndArray();
-			
+
 			writer.WriteEndObject();*/
 			writer.WriteRawValue(JsonSerializer.SerializeToUtf8Bytes(this, SettingsManager.DefaultSerializerOptions));
 		}
@@ -149,6 +154,7 @@ namespace Editor.Model
 
 			return hitbox;
 		}
+		public List<KeyframeableValue> EnumerateKeyframeableValues() => [];
 	}
 	public enum HitboxType : byte
 	{

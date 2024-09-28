@@ -3,7 +3,6 @@ using Editor.Model.Interpolators;
 
 using System;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -13,7 +12,12 @@ namespace Editor.Model
 {
 	public class Vector2KeyframeValue : KeyframeableValue
 	{
-		public Vector2KeyframeValue(TextureAnimationObject animationObject, Vector2 defaultValue, string name, params string[] tags) : base(animationObject, defaultValue, name, typeof(Vector2), tags)
+		[JsonConstructor]
+		public Vector2KeyframeValue()
+		{
+		}
+
+		public Vector2KeyframeValue(TextureAnimationObject animationObject, Vector2 defaultValue, string name, bool createDefaultKeyframe = true) : base(animationObject, defaultValue, name, typeof(Vector2), createDefaultKeyframe)
 		{
 		}
 
@@ -40,14 +44,25 @@ namespace Editor.Model
 			cachedValue = (value, frame);
 		}
 
-		public override KeyframeableValue Clone()
+		public virtual KeyframeableValue Clone()
 		{
-			return new Vector2KeyframeValue(Owner, (Vector2)DefaultValue, Name, tags.ToArray()).CloneKeyframeData(this);
+			return new Vector2KeyframeValue(Owner, (Vector2)DefaultValue, Name, false)
+			{
+				DefaultValue = DefaultValue,
+				keyframes = keyframes.ToList(),
+				links = links.ToList(),
+				tags = tags.ToList()
+			}.CloneKeyframeData(this).AddTags(tags);
 		}
 	}
 	public class FloatKeyframeValue : KeyframeableValue
 	{
-		public FloatKeyframeValue(TextureAnimationObject animationObject, float defaultValue, string name, params string[] tags) : base(animationObject, defaultValue, name, typeof(float), tags)
+		[JsonConstructor]
+		public FloatKeyframeValue()
+		{
+		}
+
+		public FloatKeyframeValue(TextureAnimationObject animationObject, float defaultValue, string name, bool createDefaultKeyframe = true) : base(animationObject, defaultValue, name, typeof(float), createDefaultKeyframe)
 		{
 		}
 
@@ -73,15 +88,15 @@ namespace Editor.Model
 			Interpolate(this, frame, FloatInterpolator, out object value);
 			cachedValue = (value, frame);
 		}
-
-		public override KeyframeableValue Clone()
-		{
-			return new FloatKeyframeValue(Owner, (float)DefaultValue, Name, tags.ToArray()).CloneKeyframeData(this);
-		}
 	}
 	public class IntKeyframeValue : KeyframeableValue
 	{
-		public IntKeyframeValue(TextureAnimationObject animationObject, int defaultValue, string name, params string[] tags) : base(animationObject, defaultValue, name, typeof(int), tags)
+		[JsonConstructor]
+		public IntKeyframeValue()
+		{
+		}
+
+		public IntKeyframeValue(TextureAnimationObject animationObject, int defaultValue, string name, bool createDefaultKeyframe = true) : base(animationObject, defaultValue, name, typeof(int), createDefaultKeyframe)
 		{
 		}
 
@@ -107,17 +122,13 @@ namespace Editor.Model
 			Interpolate(this, frame, IntegerInterpolator, out object value);
 			cachedValue = (value, frame);
 		}
-
-		public override KeyframeableValue Clone()
-		{
-			return new IntKeyframeValue(Owner, (int)DefaultValue, Name, tags.ToArray()).CloneKeyframeData(this);
-		}
 	}
 	[DebuggerDisplay("{Name}")]
 	public abstract class KeyframeableValue
 	{
 		// its 1:32 am i dont want to refactor another parameter on this boilerplate code
 		public static bool CacheValueOnInterpolate = true;
+
 		public static readonly IInterpolator Vector2Interpolator = new DelegatedInterpolator<Vector2>(
 			(fraction, first, second) => first + (second - first) * fraction,
 			(fraction, values) => InterpolateCatmullRom(values, fraction * (values.Length - 1)));
@@ -127,37 +138,41 @@ namespace Editor.Model
 		public static readonly IInterpolator FloatInterpolator = new DelegatedInterpolator<float>(
 			(fraction, first, second) => first + (second - first) * fraction,
 			(fraction, values) => InterpolateCatmullRom(values, fraction * (values.Length - 1)));
-		public readonly object DefaultValue;
 
-		public readonly List<Keyframe> keyframes;
-		public readonly List<KeyframeLink> links;
-		public readonly ImmutableArray<string> tags;
-		[JsonIgnore]
-		public readonly Type type;
+		[JsonInclude]
+		public object DefaultValue;
+
+		[JsonInclude]
+		public List<Keyframe> keyframes;
+		[JsonInclude]
+		public List<KeyframeLink> links;
+		[JsonInclude]
+		public List<string> tags;
 		[JsonIgnore]
 		protected (object value, int frame) cachedValue;
 
-		protected KeyframeableValue(TextureAnimationObject animationObject, object defaultValue, string name, Type type, string[] tags)
+		public TextureAnimationObject Owner { get; init; }
+		public string Name { get; init; }
+
+		protected KeyframeableValue(TextureAnimationObject animationObject, object defaultValue, string name, Type type, bool createDefaultKeyframe = true) : this()
 		{
 			DefaultValue = defaultValue;
 			cachedValue = (DefaultValue, -1);
 			Owner = animationObject;
 			Name = name;
-			this.tags = [..tags];
-			this.type = type;
 
-			keyframes = new List<Keyframe>
-			{
-				new Keyframe(this, 0, DefaultValue)
-			};
+			if (createDefaultKeyframe)
+				keyframes.Add(new Keyframe(this, 0, DefaultValue));
+		}
 
+		[JsonConstructor]
+		protected KeyframeableValue()
+		{
+			tags = new List<string>();
+			keyframes = new List<Keyframe>();
 			links = new List<KeyframeLink>();
 		}
 
-		[JsonIgnore]
-		public TextureAnimationObject Owner { get; init; }
-		[JsonIgnore]
-		public string Name { get; init; }
 		public ref Keyframe this[int index] => ref CollectionsMarshal.AsSpan(keyframes)[index];
 		public int KeyframeCount => keyframes.Count;
 		public int FirstFrame => HasKeyframes() ? keyframes[0].Frame : -1;
@@ -170,7 +185,7 @@ namespace Editor.Model
 			int index = FindIndexByKeyframe(value);
 
 			if (index >= 0)
-				keyframes[index] = value;
+				keyframes[index].Value = value.Value;
 			else
 			{
 				keyframes.Insert(~index, value);
@@ -185,8 +200,7 @@ namespace Editor.Model
 		{
 			Keyframe keyframe = this[index];
 
-			if (keyframe.ContainingLink != null)
-				keyframe.ContainingLink = keyframe.ContainingLink.Remove(keyframes[index]);
+			keyframe.ContainingLink?.Remove(keyframes[index]);
 
 			keyframes.RemoveAt(index);
 
@@ -277,7 +291,7 @@ namespace Editor.Model
 
 			KeyframeLink link = keyframe.ContainingLink;
 
-			if (link is null || link.Length == 1)
+			if (link is null || link.Count == 1)
 			{
 				value = keyframe.Value;
 				if (CacheValueOnInterpolate)
@@ -428,10 +442,10 @@ namespace Editor.Model
 					keyFrameIndex = ~keyFrameIndex - 1;
 				}
 
-				keyFrameIndex = Math.Clamp(keyFrameIndex, 0, link.Length - 2);
+				keyFrameIndex = Math.Clamp(keyFrameIndex, 0, link.Count - 2);
 
 				float localProgress = (interpolatedFrame - link.GetKeyframeClamped(keyFrameIndex).Frame) / (link.GetKeyframeClamped(keyFrameIndex + 1).Frame - link.GetKeyframeClamped(keyFrameIndex).Frame);
-				usedFrame = (keyFrameIndex + localProgress) / (link.Length - 1);
+				usedFrame = (keyFrameIndex + localProgress) / (link.Count - 1);
 			}
 
 			object[] objects = link.Keyframes.Select(v => v.Value).ToArray();
@@ -506,8 +520,6 @@ namespace Editor.Model
 			return keyframes.IndexOf(keyframe);
 		}
 
-		public abstract KeyframeableValue Clone();
-
 		public KeyframeableValue CloneKeyframeData(KeyframeableValue other)
 		{
 			foreach (Keyframe keyframe in other.keyframes)
@@ -526,6 +538,20 @@ namespace Editor.Model
 
 				AddLink(new KeyframeLink(this, linkKeyframes.Select(GetKeyframe)));
 			}
+
+			return this;
+		}
+
+		public KeyframeableValue AddTags(IEnumerable<string> list)
+		{
+			tags.AddRange(list);
+
+			return this;
+		}
+
+		public KeyframeableValue AddTag(string tag)
+		{
+			tags.Add(tag);
 
 			return this;
 		}
