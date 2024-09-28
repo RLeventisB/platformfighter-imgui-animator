@@ -18,6 +18,7 @@ namespace Editor.Gui
 		public const string RotationProperty = "Rotation";
 		public const string TransparencyProperty = "Transparency";
 		public const string PositionProperty = "Position";
+		public const string ZIndexProperty = "ZIndex";
 		public const string SizeXProperty = "Size X";
 		public const string SizeYProperty = "Size Y";
 
@@ -189,11 +190,12 @@ namespace Editor.Gui
 		{
 			return (value - min) / (max - min);
 		}
-		
+
 		public static NVector2 InverseLerp(NVector2 value, NVector2 min, NVector2 max)
 		{
 			return (value - min) / (max - min);
 		}
+
 		public static string SavedInput(string id, string defaultInput)
 		{
 			if (string.IsNullOrEmpty(savingInputString))
@@ -322,6 +324,7 @@ namespace Editor.Gui
 			public const char HammerIcon = '\ue996';
 			public const char KeyIcon = '\ue98d';
 
+			public const char EmptyFileIcon = '\ue924';
 			public const char FloppyDiskIcon = '\ue962';
 			public const char FolderOpenIcon = '\ue930';
 
@@ -363,6 +366,55 @@ namespace Editor.Gui
 				++byteCount;
 
 			return Encoding.UTF8.GetString(ptr, byteCount);
+		}
+
+		public static Vector2 Vec2Abs(Vector2 vector2)
+		{
+			return new Vector2(MathF.Abs(vector2.X), MathF.Abs(vector2.Y));
+		}
+	}
+	public class DampedValue
+	{
+		private float _value;
+		private float _target;
+
+		public DampedValue(float initialValue = 0f)
+		{
+			_value = _target = initialValue;
+		}
+
+		public float SnapLeniency { get; set; } = 0.001f;
+		public float Damping { get; set; } = 0.2f;
+		public float Value => _value;
+		public float Target
+		{
+			get => _target;
+			set => _target = value;
+		}
+
+		public void SnapValue(float target)
+		{
+			_value = target;
+			_target = target;
+		}
+
+		public static implicit operator float(DampedValue value) => value.Value;
+
+		public static implicit operator DampedValue(float value) => new DampedValue(value);
+
+		public bool TickDamping()
+		{
+			if (_value != _target)
+			{
+				_value = MathHelper.Lerp(_value, _target, Damping);
+
+				if (_value != _target && MathF.Abs(_value - _target) < SnapLeniency)
+					_value = _target;
+
+				return true;
+			}
+
+			return false;
 		}
 	}
 }

@@ -10,22 +10,22 @@ namespace Editor
 	public class HitboxMoveSizeDragAction : DragAction
 	{
 		public HitboxLine SelectedLine { get; }
-		public HitboxEntity HitboxEntityReference { get; }
+		public HitboxAnimationObject HitboxAnimationObjectReference { get; }
 		public readonly Vector2 OldPosition, OldSize;
 
-		public HitboxMoveSizeDragAction(HitboxLine selectedLine, HitboxEntity hitboxEntity) : base("ResizeHitboxObject", 1, true)
+		public HitboxMoveSizeDragAction(HitboxLine selectedLine, HitboxAnimationObject hitboxAnimationObject) : base("ResizeHitboxObject", 1, true)
 		{
 			SelectedLine = selectedLine;
-			HitboxEntityReference = hitboxEntity;
-			OldPosition = hitboxEntity.Position;
-			OldSize = hitboxEntity.Size;
-			EditorApplication.selectedData = new SelectionData(HitboxEntityReference); // just in case you click out of the box
+			HitboxAnimationObjectReference = hitboxAnimationObject;
+			OldPosition = hitboxAnimationObject.Position;
+			OldSize = hitboxAnimationObject.Size;
+			EditorApplication.selectedData = new SelectionData(HitboxAnimationObjectReference); // just in case you click out of the box
 		}
 
 		public override void OnMoveDrag(Vector2 worldDifference, Vector2 screenDifference)
 		{
-			Vector2 topLeft = HitboxEntityReference.Position - HitboxEntityReference.Size / 2;
-			Vector2 bottomRight = HitboxEntityReference.Position + HitboxEntityReference.Size / 2;
+			Vector2 topLeft = HitboxAnimationObjectReference.Position - HitboxAnimationObjectReference.Size / 2;
+			Vector2 bottomRight = HitboxAnimationObjectReference.Position + HitboxAnimationObjectReference.Size / 2;
 
 			switch (SelectedLine)
 			{
@@ -47,14 +47,14 @@ namespace Editor
 					break;
 			}
 
-			HitboxEntityReference.Size = bottomRight - topLeft;
-			HitboxEntityReference.Position = topLeft + HitboxEntityReference.Size / 2;
+			HitboxAnimationObjectReference.Size = bottomRight - topLeft;
+			HitboxAnimationObjectReference.Position = topLeft + HitboxAnimationObjectReference.Size / 2;
 		}
 
 		public override void OnCancel()
 		{
-			HitboxEntityReference.Position = OldPosition;
-			HitboxEntityReference.Size = OldSize;
+			HitboxAnimationObjectReference.Position = OldPosition;
+			HitboxAnimationObjectReference.Size = OldSize;
 		}
 	}
 	public class MoveKeyframeDelegateAction : DragAction
@@ -75,7 +75,7 @@ namespace Editor
 			ImGui.EndTooltip();
 		}
 
-		private static int GetHoveringFrame() => Timeline.GetFrameForTimelinePos((Input.MousePos.X - Timeline.timelineRegionMin.X) / Timeline.timelineZoom);
+		private static int GetHoveringFrame() => Timeline.GetFrameForTimelinePos((Input.MousePos.X - Timeline.timelineRegionMin.X) / Timeline.TimelineZoom);
 
 		public override void OnRelease()
 		{

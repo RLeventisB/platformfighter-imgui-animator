@@ -1,172 +1,98 @@
-using System;
-using Editor.Geometry;
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
+
 using Rune.MonoGame;
 
 namespace Editor.Graphics.Grid
 {
-    public class DynamicGrid
-    {
-        private DynamicGridSettings _settings;
-        private DynamicGridData _dynamicGridData;
-        private int _currentGridSize;
+	public class DynamicGrid
+	{
+		private readonly DynamicGridSettings _settings;
+		public const int GridSize = 32;
 
-        public DynamicGrid(DynamicGridSettings settings)
-        {
-            _settings = settings;
-            _dynamicGridData = new DynamicGridData();
-            _currentGridSize = _dynamicGridData.GridSize = settings.GridSizeInPixels;
-        }
+		public DynamicGrid(DynamicGridSettings settings)
+		{
+			_settings = settings;
+		}
 
-        public void CalculateBestGridSize(float zoomScale)
-        {
-            // hide lines if grid is smaller than specified number
-            var gridSize = _currentGridSize;
-            while (gridSize / zoomScale < _settings.HideLinesLower)
-            {
-                gridSize <<= 2;
-                if (gridSize >= _settings.MaxGridSize << 1)
-                    gridSize = _settings.MaxGridSize;
-            }
+		/// <summary>
+		/// The grid is rendered in the x,y plane by default
+		/// </summary>
+		/// <param name="batch">The renderbatch to render this grid</param>
+		/// <param name="transform">The transformation to transform to a different space</param>
+		public void Render(PrimitiveBatch batch, Matrix transform)
+		{
+			Viewport viewport = EditorApplication.Graphics.Viewport;
+			float finalGridSize = GridSize;
 
-            _dynamicGridData.GridSize = gridSize;
-        }
+			Point topLeftLine = ((Camera.ScreenToWorld(new Vector2(0, 0)) + new Vector2(-finalGridSize, -finalGridSize)) / finalGridSize).ToPoint();
+			Point topRightLine = ((Camera.ScreenToWorld(new Vector2(viewport.Width, 0)) + new Vector2(finalGridSize, -finalGridSize)) / finalGridSize).ToPoint();
+			Point bottomRightLine = ((Camera.ScreenToWorld(new Vector2(viewport.Width, viewport.Height)) + new Vector2(finalGridSize, finalGridSize)) / finalGridSize).ToPoint();
+			Point bottomLeftLine = ((Camera.ScreenToWorld(new Vector2(0, viewport.Height)) + new Vector2(-finalGridSize, finalGridSize)) / finalGridSize).ToPoint();
 
-        /// <summary>
-        /// Data is always calculated for x,y space
-        /// </summary>
-        /// <param name="calculateGridBounds">Delegate expecting correct Aabb values in x,y space</param>
-        public void CalculateGridData(Func<DynamicGridData, Aabb> calculateGridBounds)
-        {
-            var gridBounds = calculateGridBounds(_dynamicGridData);
-            var gridSize = _dynamicGridData.GridSize;
+			// the grid lines are ordered as minor, major, origin
+			for (int lineType = 0; lineType < 3; lineType++)
+			{
+				Color lineColor = _settings.MinorGridColor;
+				if (lineType == 1)
+					lineColor = _settings.MajorGridColor;
+				else if (lineType == 2)
+					lineColor = _settings.OriginGridColor;
 
-            float gridWidth = gridBounds.Max.X - gridBounds.Min.X;
-            float gridHeight = gridBounds.Max.Y - gridBounds.Min.Y;
+				// draw horizontal lines
+				for (int i = topLeftLine.Y; i <= bottomRightLine.Y; ++i)
+				{
+					// skip any line that don't match the line type we're adding
+					if (lineType == 0 && (i == 0 || i % _settings.MajorLineEvery == 0))
+						continue;
 
-            int gridCountX = (int) gridWidth / gridSize + gridSize;
-            int gridCountY = (int) gridHeight / gridSize + gridSize;
-            int gridStartX = (int) gridBounds.Min.X / gridSize - 1;
-            int gridStartY = (int) gridBounds.Min.Y / gridSize - 1;
-            
-            _dynamicGridData.GridCount = new Vector2i(gridCountX, gridCountY);
-            _dynamicGridData.GridStart = new Vector2i(gridStartX, gridStartY);
+					if (lineType == 1 && (i == 0 || i % _settings.MajorLineEvery != 0))
+						continue;
 
-            // Set line start and line end in world space coordinates
-            float lineStartX = gridStartX * gridSize;
-            float lineStartY = gridStartY * gridSize;
-            float lineEndX = (gridStartX + (gridCountX - 1)) * gridSize;
-            float lineEndY = (gridStartY + (gridCountY - 1)) * gridSize;
+					if (lineType == 2 && i != 0)
+						continue;
 
-            // keep line start and line end inside the grid dimensions
-            var finalLineStartX = Math.Max(lineStartX, -_dynamicGridData.GridDim);
-            var finalLineStartY = Math.Max(lineStartY, -_dynamicGridData.GridDim);
-            var finalLineEndX = Math.Min(lineEndX, _dynamicGridData.GridDim);
-            var finalLineEndY = Math.Min(lineEndY, _dynamicGridData.GridDim);
-            
-            _dynamicGridData.LineStart = new Vector2(finalLineStartX, finalLineStartY);
-            _dynamicGridData.LineEnd = new Vector2(finalLineEndX, finalLineEndY);
-        }
+					Vector3 from = default;
+					Vector3 to = default;
+					to.X = topLeftLine.X * finalGridSize;
+					from.X = topRightLine.X * finalGridSize;
+					from.Y = to.Y = i * finalGridSize;
+					from.Z = 0;
+					to.Z = 0;
 
-        /// <summary>
-        /// The grid is rendered in the x,y plane by default
-        /// </summary>
-        /// <param name="batch">The renderbatch to render this grid</param>
-        /// <param name="transform">The transformation to transform to a different space</param>
-        public void Render(PrimitiveBatch batch, Matrix transform)
-        {
-            Vector2i gridStart = _dynamicGridData.GridStart;
-            Vector2i gridCount = _dynamicGridData.GridCount;
-            Vector2 lineStart = _dynamicGridData.LineStart;
-            Vector2 lineEnd = _dynamicGridData.LineEnd;
-            int gridSize = _dynamicGridData.GridSize;
-            int gridDim = _dynamicGridData.GridDim;
+					Vector3.Transform(ref to, ref transform, out to);
+					Vector3.Transform(ref from, ref transform, out from);
 
-            // the grid lines are ordered as minor, major, origin
-            for (int lineType = 0; lineType < 3; lineType++)
-            {
-                Color lineColor = _settings.MinorGridColor;
-                if (lineType == 1)
-                    lineColor = _settings.MajorGridColor;
-                else if (lineType == 2)
-                    lineColor = _settings.OriginGridColor;
+					batch.DrawLine(from, to, lineColor);
+				}
 
-                // draw horizontal lines
-                for (int i = gridStart.Y; i < gridStart.Y + gridCount.Y; ++i)
-                {
-                    // skip lines that are out of bound
-                    if (i * gridSize < -gridDim || i * gridSize > gridDim)
-                        continue;
+				// draw vertical lines
+				for (int i = topLeftLine.X; i <= topRightLine.X; ++i)
+				{
+					// skip any line that don't match the line type we're adding
+					if (lineType == 0 && (i == 0 || i % _settings.MajorLineEvery == 0))
+						continue;
 
-                    // skip any line that don't match the line type we're adding
-                    if (lineType == 0 && (i == 0 || (i % _settings.MajorLineEvery) == 0))
-                        continue;
+					if (lineType == 1 && (i == 0 || i % _settings.MajorLineEvery != 0))
+						continue;
 
-                    if (lineType == 1 && (i == 0 || (i % _settings.MajorLineEvery) != 0))
-                        continue;
+					if (lineType == 2 && i != 0)
+						continue;
 
-                    if (lineType == 2 && i != 0)
-                        continue;
+					Vector3 from = default;
+					Vector3 to = default;
+					to.Y = topLeftLine.Y * finalGridSize;
+					from.Y = bottomLeftLine.Y * finalGridSize;
+					from.X = to.X = i * finalGridSize;
+					from.Z = 0;
+					to.Z = 0;
 
-                    Vector3 from = default;
-                    Vector3 to = default;
-                    to.X = lineEnd.X;
-                    from.X = lineStart.X;
-                    from.Y = to.Y = i * gridSize;
+					Vector3.Transform(ref to, ref transform, out to);
+					Vector3.Transform(ref from, ref transform, out from);
 
-                    Vector3.Transform(ref to, ref transform, out to);
-                    Vector3.Transform(ref from, ref transform, out from);
-
-                    batch.DrawLine(from, to, lineColor);
-                }
-
-                // draw vertical lines
-                for (int i = gridStart.X; i <  gridStart.X + gridCount.X; ++i)
-                {
-                    // skip lines that are out of bound
-                    if (i * gridSize < -gridDim || i * gridSize > gridDim)
-                        continue;
-
-                    // skip any line that don't match the line type we're adding
-                    if (lineType == 0 && (i == 0 || (i % _settings.MajorLineEvery) == 0))
-                        continue;
-
-                    if (lineType == 1 && (i == 0 || (i % _settings.MajorLineEvery) != 0))
-                        continue;
-
-                    if (lineType == 2 && i != 0)
-                        continue;
-
-                    Vector3 from = default;
-                    Vector3 to = default;
-                    to.Y = lineEnd.Y; 
-                    from.Y = lineStart.Y;
-                    from.X = to.X = i * gridSize;
-                    
-                    Vector3.Transform(ref to, ref transform, out to);
-                    Vector3.Transform(ref from, ref transform, out from);
-
-                    batch.DrawLine(from, to, lineColor);
-                }
-            }
-        }
-
-        public void IncreaseGridSize()
-        {
-            _currentGridSize = _currentGridSize << 1;
-            if (_currentGridSize == _settings.MaxGridSize << 1)
-            {
-                _currentGridSize = _settings.MaxGridSize;
-            }
-        }
-
-        public void DecreaseGridSize()
-        {
-            _currentGridSize = _currentGridSize >> 1;
-            if (_currentGridSize == 0)
-            {
-                _currentGridSize = 1;
-            }
-        }
-    }
+					batch.DrawLine(from, to, lineColor);
+				}
+			}
+		}
+	}
 }

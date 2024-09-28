@@ -13,8 +13,8 @@ namespace Editor.Model
 {
 	public class Animator
 	{
-		public readonly EntityList<TextureEntity> RegisteredGraphics;
-		public readonly EntityList<HitboxEntity> RegisteredHitboxes;
+		public readonly EntityList<TextureAnimationObject> RegisteredGraphics;
+		public readonly EntityList<HitboxAnimationObject> RegisteredHitboxes;
 
 		private int _currentKeyframe;
 		private int _framesPerSecond = 120;
@@ -23,10 +23,10 @@ namespace Editor.Model
 
 		public Action OnKeyframeChanged;
 
-		public Animator(Dictionary<string, TextureEntity> graphicEntities, Dictionary<string, HitboxEntity> hitboxEntities)
+		public Animator(Dictionary<string, TextureAnimationObject> graphicEntities, Dictionary<string, HitboxAnimationObject> hitboxEntities)
 		{
-			RegisteredHitboxes = new EntityList<HitboxEntity>(hitboxEntities);
-			RegisteredGraphics = new EntityList<TextureEntity>(graphicEntities);
+			RegisteredHitboxes = new EntityList<HitboxAnimationObject>(hitboxEntities);
+			RegisteredGraphics = new EntityList<TextureAnimationObject>(graphicEntities);
 			FPS = 120;
 		}
 
@@ -91,7 +91,7 @@ namespace Editor.Model
 		{
 			int firstFrame = int.MaxValue;
 
-			foreach (TextureEntity entity in RegisteredGraphics)
+			foreach (TextureAnimationObject entity in RegisteredGraphics)
 			{
 				foreach (KeyframeableValue value in entity.EnumerateKeyframeableValues())
 				{
@@ -100,7 +100,7 @@ namespace Editor.Model
 				}
 			}
 
-			foreach (HitboxEntity hitbox in RegisteredHitboxes)
+			foreach (HitboxAnimationObject hitbox in RegisteredHitboxes)
 			{
 				if (hitbox.SpawnFrame < firstFrame)
 					firstFrame = hitbox.SpawnFrame;
@@ -113,7 +113,7 @@ namespace Editor.Model
 		{
 			int lastFrame = int.MinValue;
 
-			foreach (TextureEntity entity in RegisteredGraphics)
+			foreach (TextureAnimationObject entity in RegisteredGraphics)
 			{
 				foreach (KeyframeableValue value in entity.EnumerateKeyframeableValues())
 				{
@@ -127,7 +127,7 @@ namespace Editor.Model
 				}
 			}
 
-			foreach (HitboxEntity hitbox in RegisteredHitboxes)
+			foreach (HitboxAnimationObject hitbox in RegisteredHitboxes)
 			{
 				if (hitbox.EndFrame > lastFrame)
 					lastFrame = hitbox.EndFrame;
@@ -141,7 +141,7 @@ namespace Editor.Model
 			int f = frame ?? _currentKeyframe;
 			int previousFrame = GetFirstFrame();
 
-			foreach (TextureEntity entity in GetAllEntities())
+			foreach (TextureAnimationObject entity in GetAllEntities())
 			{
 				foreach (KeyframeableValue value in entity.EnumerateKeyframeableValues())
 				{
@@ -170,7 +170,7 @@ namespace Editor.Model
 			int f = frame ?? _currentKeyframe;
 			int nextFrame = GetLastFrame();
 
-			foreach (TextureEntity entity in GetAllEntities())
+			foreach (TextureAnimationObject entity in GetAllEntities())
 			{
 				foreach (KeyframeableValue value in entity.EnumerateKeyframeableValues())
 				{
@@ -295,9 +295,9 @@ namespace Editor.Model
 			return RegisteredGraphics.Any(EntityHasKeyframes);
 		}
 
-		public static bool EntityHasKeyframes(TextureEntity entity)
+		public static bool EntityHasKeyframes(TextureAnimationObject animationObject)
 		{
-			foreach (KeyframeableValue value in entity.EnumerateKeyframeableValues())
+			foreach (KeyframeableValue value in animationObject.EnumerateKeyframeableValues())
 			{
 				if (value.HasKeyframes())
 					return true;
@@ -308,7 +308,7 @@ namespace Editor.Model
 
 		public bool EntityHasKeyframeAtFrame(string entityName, int frame)
 		{
-			if (!RegisteredGraphics.TryGetValue(entityName, out TextureEntity entity))
+			if (!RegisteredGraphics.TryGetValue(entityName, out TextureAnimationObject entity))
 				return false;
 
 			foreach (KeyframeableValue value in entity.EnumerateKeyframeableValues())
@@ -320,15 +320,15 @@ namespace Editor.Model
 			return false;
 		}
 
-		public List<IEntity> GetAllEntities()
+		public List<IAnimationObject> GetAllEntities()
 		{
-			List<IEntity> entityList = RegisteredGraphics.ListEntitiesBase();
+			List<IAnimationObject> entityList = RegisteredGraphics.ListEntitiesBase();
 			entityList.AddRange(RegisteredHitboxes.ListEntitiesBase());
 
 			return entityList;
 		}
 	}
-	public class EntityList<T> : IEnumerable<T> where T : IEntity
+	public class EntityList<T> : IEnumerable<T> where T : IAnimationObject
 	{
 		public readonly Dictionary<string, T> registry;
 
@@ -350,7 +350,7 @@ namespace Editor.Model
 			return registry.TryGetValue(name, out value);
 		}
 
-		public List<IEntity> ListEntitiesBase() => registry.Values.Cast<IEntity>().ToList();
+		public List<IAnimationObject> ListEntitiesBase() => registry.Values.Cast<IAnimationObject>().ToList();
 
 		public bool ChangeEntityName(string oldName, string newName)
 		{

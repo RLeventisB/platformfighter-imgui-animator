@@ -6,7 +6,6 @@ global using Point = Microsoft.Xna.Framework.Point;
 
 global using static Editor.Gui.ImGuiEx;
 
-using Editor.Geometry;
 using Editor.Graphics;
 using Editor.Graphics.Grid;
 using Editor.Gui;
@@ -23,6 +22,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 
 using Vector3 = Microsoft.Xna.Framework.Vector3;
@@ -34,15 +34,16 @@ namespace Editor
 		public State()
 		{
 			Textures = new Dictionary<string, TextureFrame>();
-			GraphicEntities = new Dictionary<string, TextureEntity>();
-			HitboxEntities = new Dictionary<string, HitboxEntity>();
+			GraphicEntities = new Dictionary<string, TextureAnimationObject>();
+			HitboxEntities = new Dictionary<string, HitboxAnimationObject>();
 			Animator = new Animator(GraphicEntities, HitboxEntities);
 		}
 
 		public Dictionary<string, TextureFrame> Textures { get; set; }
-		public Dictionary<string, TextureEntity> GraphicEntities { get; set; }
-		public Dictionary<string, HitboxEntity> HitboxEntities { get; set; }
+		public Dictionary<string, TextureAnimationObject> GraphicEntities { get; set; }
+		public Dictionary<string, HitboxAnimationObject> HitboxEntities { get; set; }
 		public Animator Animator { get; set; }
+		public bool HasAnyEntity => GraphicEntities.Count > 0 || HitboxEntities.Count > 0;
 
 		public TextureFrame GetTexture(string id)
 		{
@@ -71,24 +72,27 @@ namespace Editor
 
 		public EditorApplication()
 		{
-			string[] iniData = File.ReadAllLines("./imgui.ini");
-			int windowDataIndex = iniData.ToList().FindIndex(v => v.Contains("[Window][World View]"));
-			string sizeData;
-
-			if (windowDataIndex != -1 && iniData.Length > windowDataIndex + 2 && (sizeData = iniData[windowDataIndex + 2]).Contains("Size="))
+			if (File.Exists("./imgui.ini"))
 			{
-				string[] resolutionSize = sizeData.Substring(5).Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+				string[] iniData = File.ReadAllLines("./imgui.ini");
+				int windowDataIndex = iniData.ToList().FindIndex(v => v.Contains("[Window][World View]"));
+				string sizeData;
 
-				if (resolutionSize.Length == 2 && int.TryParse(resolutionSize[0], out int width) && int.TryParse(resolutionSize[1], out int height))
+				if (windowDataIndex != -1 && iniData.Length > windowDataIndex + 2 && (sizeData = iniData[windowDataIndex + 2]).Contains("Size="))
 				{
-					new GraphicsDeviceManager(this)
-					{
-						IsFullScreen = false,
-						PreferredBackBufferWidth = width,
-						PreferredBackBufferHeight = height
-					};
+					string[] resolutionSize = sizeData.Substring(5).Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
 
-					goto skipNormalConstructor;
+					if (resolutionSize.Length == 2 && int.TryParse(resolutionSize[0], out int width) && int.TryParse(resolutionSize[1], out int height))
+					{
+						new GraphicsDeviceManager(this)
+						{
+							IsFullScreen = false,
+							PreferredBackBufferWidth = width,
+							PreferredBackBufferHeight = height
+						};
+
+						goto skipNormalConstructor;
+					}
 				}
 			}
 
@@ -114,9 +118,6 @@ namespace Editor
 			Grid = new DynamicGrid(new DynamicGridSettings
 				{ GridSizeInPixels = 32 });
 
-			// offset a bit to show origin at correct position
-			Camera.Move(Vector3.One * 64);
-
 			ResetEditor();
 
 			base.Initialize();
@@ -133,9 +134,10 @@ namespace Editor
 
 		private static void InitializeDefaultState(State state)
 		{
+			SettingsManager.lastProjectSavePath = null;
 			state.Animator.OnKeyframeChanged += () =>
 			{
-				foreach (TextureEntity entity in State.GraphicEntities.Values)
+				foreach (TextureAnimationObject entity in State.GraphicEntities.Values)
 				{
 					foreach (KeyframeableValue propertyId in entity.EnumerateKeyframeableValues())
 					{
@@ -149,7 +151,7 @@ namespace Editor
 		{
 			Texture2D singlePixelTexture = new Texture2D(GraphicsDevice, 1, 1);
 			ImguiRenderer = new ImGuiRenderer(this);
-			SinglePixel = new TextureFrame("SinglePixel", singlePixelTexture, string.Empty, new Point(1), null, NVector2.One / 2);
+			SinglePixel = new TextureFrame("SinglePixel", singlePixelTexture, new Point(1), null, NVector2.One / 2);
 			IcoMoon.AddIconsToDefaultFont(14f);
 			ImguiRenderer.RebuildFontAtlas();
 
@@ -196,27 +198,6 @@ namespace Editor
 
 			currentDragAction?.Update();
 
-			Grid.CalculateBestGridSize(Camera.Zoom);
-
-			Grid.CalculateGridData(data =>
-			{
-				Viewport viewport = GraphicsDevice.Viewport;
-				data.GridDim = viewport.Height;
-
-				Vector2 worldTopLeft = Camera.ScreenToWorld(new Vector2(0, 0));
-				Vector2 worldTopRight = Camera.ScreenToWorld(new Vector2(viewport.Width, 0));
-				Vector2 worldBottomRight = Camera.ScreenToWorld(new Vector2(viewport.Width, viewport.Height));
-				Vector2 worldBottomLeft = Camera.ScreenToWorld(new Vector2(0, viewport.Height));
-
-				Aabb bounds = new Aabb();
-				bounds.Grow(worldTopLeft.X, worldTopLeft.Y, 0);
-				bounds.Grow(worldTopRight.X, worldTopRight.Y, 0);
-				bounds.Grow(worldBottomRight.X, worldBottomRight.Y, 0);
-				bounds.Grow(worldBottomLeft.X, worldBottomLeft.Y, 0);
-
-				return bounds;
-			});
-
 			State.Animator.Update((float)gameTime.ElapsedGameTime.TotalSeconds);
 		}
 
@@ -226,6 +207,10 @@ namespace Editor
 
 			ImguiRenderer.BeforeLayout(gameTime);
 
+			/*ImGui.Text("Screen: " + Input.MousePos);
+			ImGui.Text("Projected:" + Vector2.Transform(Input.MousePos, Camera.Projection));
+			ImGui.Text("World:" + Camera.ScreenToWorld(Input.MousePos));
+			ImGui.Text("World:" + Camera.WorldToScreen(Camera.ScreenToWorld(Input.MousePos)));*/
 			ImGui.SetNextWindowPos(NVector2.Zero);
 			ImGui.SetNextWindowSize(new NVector2(Graphics.Viewport.Width, Graphics.Viewport.Height));
 			ImGui.Begin("World View", ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoBackground | ImGuiWindowFlags.NoBringToFrontOnFocus);
@@ -234,17 +219,13 @@ namespace Editor
 
 			WorldActions.Draw(); // since this has the camera panning this get called first
 
+			if (Camera.Zoom.TickDamping())
+				Camera.isViewDirty = true;
+
+			Timeline.TimelineZoom.TickDamping();
 			primitiveBatch.Begin(Camera.View, Camera.Projection); // look!!! two begins!!
 			Grid.Render(primitiveBatch, Matrix.Identity);
 			primitiveBatch.End();
-
-			Vector3 translation = Camera.View.Translation;
-
-			Matrix spriteBatchTransformation = Matrix.CreateTranslation(Camera.lastSize.X / 2, Camera.lastSize.Y / 2, 0) *
-			                                   Matrix.CreateTranslation(translation.X, translation.Y, 0)
-			                                 * Matrix.CreateScale(Camera.Zoom);
-
-			spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.NonPremultiplied, SamplerState.PointClamp, null, null, null, spriteBatchTransformation); // now 3
 
 			ImDrawListPtr drawList = ImGui.GetBackgroundDrawList();
 
@@ -254,11 +235,11 @@ namespace Editor
 			primitiveBatch.Begin(Camera.View, Camera.Projection); // look!!! two begins!!
 
 			if (!string.IsNullOrEmpty(hoveredEntityName))
-				DrawSpriteBounds(drawList, hoveredEntityName, Color.CornflowerBlue.PackedValue); // this could probably be moved to primitivebatch
+				DrawSpriteBounds(hoveredEntityName, Color.CornflowerBlue); // this could probably be moved to primitivebatch
 
 			if (selectedData.ObjectSelectionType == SelectionType.Graphic)
 			{
-				DrawSpriteBounds(drawList, selectedData.Name, Color.Red.PackedValue);
+				DrawSpriteBounds(selectedData.Name, Color.Red);
 			}
 
 			if (Timeline.selectedLink != null)
@@ -295,7 +276,7 @@ namespace Editor
 		{
 			primitiveBatch.Begin(Camera.View, Camera.Projection);
 
-			foreach (HitboxEntity entity in State.HitboxEntities.Values.Where(v => v.IsOnFrame(State.Animator.CurrentKeyframe)))
+			foreach (HitboxAnimationObject entity in State.HitboxEntities.Values.Where(v => v.IsOnFrame(State.Animator.CurrentKeyframe)))
 			{
 				Vector3 center = new Vector3(entity.Position, 0);
 				Vector3 size = new Vector3(entity.Size, 0);
@@ -321,7 +302,24 @@ namespace Editor
 
 		private static void DrawGraphicEntities()
 		{
-			foreach (TextureEntity entity in State.GraphicEntities.Values)
+			Matrix spriteBatchTransformation =
+				Camera.View;
+
+			spriteBatch.Begin(SpriteSortMode.FrontToBack, BlendState.NonPremultiplied, SamplerState.PointClamp, null, null, null, spriteBatchTransformation);
+			// FieldInfo spriteEffectInfo = typeof(SpriteBatch).GetField("_spriteEffect", BindingFlags.Instance | BindingFlags.NonPublic);
+			// FieldInfo matrixParamInfo = typeof(SpriteEffect).GetField("_matrixParam", BindingFlags.Instance | BindingFlags.NonPublic);
+			// FieldInfo projectionInfo = typeof(SpriteEffect).GetField("_projection", BindingFlags.Instance | BindingFlags.NonPublic);
+
+			// SpriteEffect effect = (SpriteEffect)spriteEffectInfo.GetValue(spriteBatch);
+			// EffectParameter parameter = (EffectParameter)matrixParamInfo.GetValue(effect);
+
+			// parameter.SetValue(spriteBatchTransformation * Camera.Projection);
+
+			// projectionInfo.SetValue(effect, (Camera.Projection));
+			// matrixParamInfo.SetValue(effect, parameter);
+			// spriteEffectInfo.SetValue(spriteBatch, effect);
+
+			foreach (TextureAnimationObject entity in State.GraphicEntities.Values)
 			{
 				Color color = new Color(1f, 1f, 1f, entity.Transparency.CachedValue);
 
@@ -337,6 +335,19 @@ namespace Editor
 				int frameIndex = entity.FrameIndex.CachedValue;
 				float rotation = entity.Rotation.CachedValue;
 				Vector2 scale = entity.Scale.CachedValue;
+				SpriteEffects effects = SpriteEffects.None;
+
+				if (scale.X < 0)
+				{
+					scale.X = -scale.X;
+					effects |= SpriteEffects.FlipHorizontally;
+				}
+
+				if (scale.Y < 0)
+				{
+					scale.Y = -scale.Y;
+					effects |= SpriteEffects.FlipVertically;
+				}
 
 				TextureFrame texture = State.GetTexture(entity.TextureName);
 				int framesX = texture.Width / texture.FrameSize.X;
@@ -350,43 +361,59 @@ namespace Editor
 					texture.FrameSize.X, texture.FrameSize.Y);
 
 				spriteBatch.Draw(texture, position, sourceRect, color,
-					rotation, new Vector2(texture.Pivot.X, texture.Pivot.Y),
-					scale, SpriteEffects.None, 0f);
+					rotation, texture.Pivot,
+					scale, effects, selectedData.IsOf(entity) ? 1 : entity.ZIndex.CachedValue);
 			}
 
 			spriteBatch.End();
 		}
 
-		private void DrawSpriteBounds(ImDrawListPtr drawlist, string entityId, uint color)
+		private void DrawSpriteBounds(string entityId, Color color)
 		{
-			TextureEntity textureEntity = State.GraphicEntities[entityId];
-			TextureFrame texture = State.GetTexture(textureEntity.TextureName);
-			Vector2 position = textureEntity.Position.CachedValue;
-			Vector2 scale = textureEntity.Scale.CachedValue * Camera.Zoom;
-			float rotation = textureEntity.Rotation.CachedValue;
-
-			Vector2 sp = Camera.WorldToScreen(new Vector2(position.X, position.Y));
-
-			(NVector2 tl, NVector2 tr, NVector2 bl, NVector2 br) = GetQuads(sp.X, sp.Y, -texture.Pivot.X * scale.X, -texture.Pivot.Y * scale.Y, texture.FrameSize.X * scale.X, texture.FrameSize.Y * scale.Y, MathF.Sin(rotation), MathF.Cos(rotation));
-			drawlist.AddQuad(tl, tr, br, bl, color);
+			TextureAnimationObject textureAnimationObject = State.GraphicEntities[entityId];
+			TextureFrame texture = State.GetTexture(textureAnimationObject.TextureName);
+			Vector2 position = textureAnimationObject.Position.CachedValue;
+			Vector2 scale = textureAnimationObject.Scale.CachedValue;
+			float rotation = textureAnimationObject.Rotation.CachedValue;
+			
+			(Vector3 tl, Vector3 tr, Vector3 bl, Vector3 br) = GetQuads(position.X, position.Y, -texture.Pivot.X * scale.X, -texture.Pivot.Y * scale.Y, texture.FrameSize.X * scale.X, texture.FrameSize.Y * scale.Y, MathF.Sin(rotation), MathF.Cos(rotation));
+			primitiveBatch.DrawPolygon([tl, tr, br, bl], color);
 		}
 
-		public static (NVector2 tl, NVector2 tr, NVector2 bl, NVector2 br) GetQuads(float x, float y, float pivotX, float pivotY, float w, float h, float sin, float cos)
+		public static (Vector3 tl, Vector3 tr, Vector3 bl, Vector3 br) GetQuads(float x, float y, float pivotX, float pivotY, float w, float h, float sin, float cos)
 		{
-			NVector2 tl;
-			NVector2 tr;
-			NVector2 bl;
-			NVector2 br;
-			tl.X = x + pivotX * cos - pivotY * sin;
-			tl.Y = y + pivotX * sin + pivotY * cos;
-			tr.X = x + (pivotX + w) * cos - pivotY * sin;
-			tr.Y = y + (pivotX + w) * sin + pivotY * cos;
-			bl.X = x + pivotX * cos - (pivotY + h) * sin;
-			bl.Y = y + pivotX * sin + (pivotY + h) * cos;
-			br.X = x + (pivotX + w) * cos - (pivotY + h) * sin;
-			br.Y = y + (pivotX + w) * sin + (pivotY + h) * cos;
+			GetQuadsPrimitive(x, y, pivotX, pivotY, w, h, sin, cos,
+				out float tlX, out float tlY,
+				out float trX, out float trY,
+				out float blX, out float blY,
+				out float brX, out float brY
+			);
 
-			return (tl, tr, bl, br);
+			return (new Vector3(tlX, tlY, 0), new Vector3(trX, trY, 0), new Vector3(blX, blY, 0), new Vector3(brX, brY, 0));
+		}
+
+		private static void GetQuadsPrimitive(float x, float y, float pivotX, float pivotY, float w, float h, float sin, float cos, out float tlX, out float tlY, out float trX, out float trY, out float blX, out float blY, out float brX, out float brY)
+		{
+			tlX = x + pivotX * cos - pivotY * sin;
+			tlY = y + pivotX * sin + pivotY * cos;
+			trX = x + (pivotX + w) * cos - pivotY * sin;
+			trY = y + (pivotX + w) * sin + pivotY * cos;
+			blX = x + pivotX * cos - (pivotY + h) * sin;
+			blY = y + pivotX * sin + (pivotY + h) * cos;
+			brX = x + (pivotX + w) * cos - (pivotY + h) * sin;
+			brY = y + (pivotX + w) * sin + (pivotY + h) * cos;
+		}
+
+		public static (NVector2 tl, NVector2 tr, NVector2 bl, NVector2 br) GetQuadsNumeric(float x, float y, float pivotX, float pivotY, float w, float h, float sin, float cos)
+		{
+			GetQuadsPrimitive(x, y, pivotX, pivotY, w, h, sin, cos,
+				out float tlX, out float tlY,
+				out float trX, out float trY,
+				out float blX, out float blY,
+				out float brX, out float brY
+			);
+
+			return (new NVector2(tlX, tlY), new NVector2(trX, trY), new NVector2(blX, blY), new NVector2(brX, brY));
 		}
 
 		private void DrawLinkOverlays(ImDrawListPtr drawList)
@@ -467,7 +494,7 @@ namespace Editor
 		{
 			float* glyphDataPtr = (float*)glyph.NativePtr; // jaja imgui.net no acepta el commit DE 4 AÑOS que añade bitfields el cual arregla el orden de ImFontGlyph
 
-			(NVector2 tl, NVector2 tr, NVector2 bl, NVector2 br) = GetQuads(position.X, position.Y, -8, -8, 16, 16, sin, cos);
+			(NVector2 tl, NVector2 tr, NVector2 bl, NVector2 br) = GetQuadsNumeric(position.X, position.Y, -8, -8, 16, 16, sin, cos);
 
 			NVector2 uv0 = new NVector2(glyphDataPtr[6], glyphDataPtr[7]);
 			NVector2 uv1 = new NVector2(glyphDataPtr[8], glyphDataPtr[7]);
@@ -476,23 +503,23 @@ namespace Editor
 			drawList.AddImageQuad(ImguiRenderer.fontTextureId.Value, tl, tr, br, bl, uv0, uv1, uv2, uv3, Color.White.PackedValue);
 		}
 
-		public static void RenameEntity(TextureEntity textureEntity, string newName)
+		public static void RenameEntity(TextureAnimationObject textureAnimationObject, string newName)
 		{
 // re-add entity
-			string oldName = textureEntity.Name;
+			string oldName = textureAnimationObject.Name;
 			State.GraphicEntities.Remove(oldName);
-			State.GraphicEntities[newName] = textureEntity;
-			textureEntity.Name = newName;
+			State.GraphicEntities[newName] = textureAnimationObject;
+			textureAnimationObject.Name = newName;
 
 			if (State.Animator.RegisteredGraphics.ChangeEntityName(oldName, newName))
 			{
-				foreach (KeyframeableValue value in textureEntity.EnumerateKeyframeableValues())
+				foreach (KeyframeableValue value in textureAnimationObject.EnumerateKeyframeableValues())
 				{
 					//value.Owner = textureEntity;
 				}
 			}
 
-			selectedData = new SelectionData(textureEntity);
+			selectedData = new SelectionData(textureAnimationObject);
 		}
 
 		public static void RenameTexture(TextureFrame textureFrame, string newName)
@@ -502,7 +529,7 @@ namespace Editor
 			State.Textures[newName] = textureFrame;
 			textureFrame.Name = newName;
 
-			foreach (TextureEntity entity in State.GraphicEntities.Values)
+			foreach (TextureAnimationObject entity in State.GraphicEntities.Values)
 			{
 				if (entity.TextureName == oldName)
 				{

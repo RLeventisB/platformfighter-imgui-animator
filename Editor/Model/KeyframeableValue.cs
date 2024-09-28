@@ -12,7 +12,7 @@ namespace Editor.Model
 {
 	public class Vector2KeyframeValue : KeyframeableValue
 	{
-		public Vector2KeyframeValue(TextureEntity entity, Vector2 defaultValue, string name, params string[] tags) : base(entity, defaultValue, name, typeof(Vector2), tags)
+		public Vector2KeyframeValue(TextureAnimationObject animationObject, Vector2 defaultValue, string name, params string[] tags) : base(animationObject, defaultValue, name, typeof(Vector2), tags)
 		{
 		}
 
@@ -38,10 +38,15 @@ namespace Editor.Model
 			Interpolate(this, frame, Vector2Interpolator, out object value);
 			cachedValue = (value, frame);
 		}
+
+		public override KeyframeableValue Clone()
+		{
+			return new Vector2KeyframeValue(Owner, (Vector2)DefaultValue, Name, tags.ToArray()).CloneKeyframeData(this);
+		}
 	}
 	public class FloatKeyframeValue : KeyframeableValue
 	{
-		public FloatKeyframeValue(TextureEntity entity, float defaultValue, string name, params string[] tags) : base(entity, defaultValue, name, typeof(float), tags)
+		public FloatKeyframeValue(TextureAnimationObject animationObject, float defaultValue, string name, params string[] tags) : base(animationObject, defaultValue, name, typeof(float), tags)
 		{
 		}
 
@@ -67,10 +72,15 @@ namespace Editor.Model
 			Interpolate(this, frame, FloatInterpolator, out object value);
 			cachedValue = (value, frame);
 		}
+
+		public override KeyframeableValue Clone()
+		{
+			return new FloatKeyframeValue(Owner, (float)DefaultValue, Name, tags.ToArray()).CloneKeyframeData(this);
+		}
 	}
 	public class IntKeyframeValue : KeyframeableValue
 	{
-		public IntKeyframeValue(TextureEntity entity, int defaultValue, string name, params string[] tags) : base(entity, defaultValue, name, typeof(int), tags)
+		public IntKeyframeValue(TextureAnimationObject animationObject, int defaultValue, string name, params string[] tags) : base(animationObject, defaultValue, name, typeof(int), tags)
 		{
 		}
 
@@ -96,6 +106,11 @@ namespace Editor.Model
 			Interpolate(this, frame, IntegerInterpolator, out object value);
 			cachedValue = (value, frame);
 		}
+
+		public override KeyframeableValue Clone()
+		{
+			return new IntKeyframeValue(Owner, (int)DefaultValue, Name, tags.ToArray()).CloneKeyframeData(this);
+		}
 	}
 	[DebuggerDisplay("{Name}")]
 	public abstract class KeyframeableValue
@@ -119,11 +134,11 @@ namespace Editor.Model
 		public readonly Type type;
 		protected (object value, int frame) cachedValue;
 
-		protected KeyframeableValue(TextureEntity entity, object defaultValue, string name, Type type, string[] tags)
+		protected KeyframeableValue(TextureAnimationObject animationObject, object defaultValue, string name, Type type, string[] tags)
 		{
 			DefaultValue = defaultValue;
 			cachedValue = (DefaultValue, -1);
-			Owner = entity;
+			Owner = animationObject;
 			Name = name;
 			this.tags = [..tags];
 			this.type = type;
@@ -136,7 +151,7 @@ namespace Editor.Model
 			links = new List<KeyframeLink>();
 		}
 
-		public TextureEntity Owner { get; init; }
+		public TextureAnimationObject Owner { get; init; }
 		public string Name { get; init; }
 		public ref Keyframe this[int index] => ref CollectionsMarshal.AsSpan(keyframes)[index];
 		public int KeyframeCount => keyframes.Count;
@@ -449,9 +464,17 @@ namespace Editor.Model
 		public Keyframe SetKeyframeValue(int frame, object data)
 		{
 			Keyframe keyframe = new Keyframe(this, frame, data);
-			Add(keyframe);
 
-			InvalidateCachedValue();
+			if (SettingsManager.SetKeyframeOnModify)
+			{
+				Add(keyframe);
+
+				InvalidateCachedValue();
+			}
+			else
+			{
+				cachedValue = (data, frame);
+			}
 
 			return keyframe;
 		}
@@ -476,6 +499,30 @@ namespace Editor.Model
 		public int IndexOfKeyframe(Keyframe keyframe)
 		{
 			return keyframes.IndexOf(keyframe);
+		}
+
+		public abstract KeyframeableValue Clone();
+
+		public KeyframeableValue CloneKeyframeData(KeyframeableValue other)
+		{
+			foreach (Keyframe keyframe in other.keyframes)
+			{
+				Add(new Keyframe(this, keyframe.Frame, keyframe.Value));
+			}
+
+			foreach (KeyframeLink link in other.links)
+			{
+				List<int> linkKeyframes = new List<int>();
+
+				foreach (Keyframe keyframe in link)
+				{
+					linkKeyframes.Add(keyframe.Frame);
+				}
+
+				AddLink(new KeyframeLink(this, linkKeyframes.Select(GetKeyframe)));
+			}
+
+			return this;
 		}
 	}
 }

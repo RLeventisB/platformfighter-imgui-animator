@@ -6,7 +6,6 @@ using Microsoft.Xna.Framework.Input;
 
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Net.Mime;
 using System.Runtime.InteropServices;
 
@@ -37,7 +36,7 @@ namespace Editor.Gui
 		private int _indexBufferSize;
 
 		// Textures
-		private readonly Dictionary<IntPtr, Texture2D> _loadedTextures;
+		public readonly Dictionary<IntPtr, Texture2D> loadedTextures;
 
 		private int _textureId;
 		public IntPtr? fontTextureId;
@@ -55,7 +54,7 @@ namespace Editor.Gui
 			_game = game ?? throw new ArgumentNullException(nameof(game));
 			_graphicsDevice = game.GraphicsDevice;
 
-			_loadedTextures = new Dictionary<IntPtr, Texture2D>();
+			loadedTextures = new Dictionary<IntPtr, Texture2D>();
 
 			_rasterizerState = new RasterizerState
 			{
@@ -88,11 +87,6 @@ namespace Editor.Gui
 			Texture2D tex2d = new Texture2D(_graphicsDevice, width, height, false, SurfaceFormat.Color);
 			tex2d.SetData(pixels);
 
-			using (FileStream stream = File.OpenWrite("./singlebiome.png"))
-			{
-				tex2d.SaveAsPng(stream, width, height);
-			}
-
 			// Should a texture already have been build previously, unbind it first so it can be deallocated
 			if (fontTextureId.HasValue) UnbindTexture(fontTextureId.Value);
 
@@ -113,7 +107,7 @@ namespace Editor.Gui
 		{
 			IntPtr id = new IntPtr(_textureId++);
 
-			_loadedTextures.Add(id, texture);
+			loadedTextures.Add(id, texture);
 
 			return id;
 		}
@@ -123,7 +117,7 @@ namespace Editor.Gui
 		/// </summary>
 		public void UnbindTexture(IntPtr textureId)
 		{
-			_loadedTextures.Remove(textureId);
+			loadedTextures.Remove(textureId);
 		}
 
 		/// <summary>
@@ -188,16 +182,11 @@ namespace Editor.Gui
 			what(ImGuiKey.RightShift, Keys.RightShift);
 			what(ImGuiKey.LeftSuper, Keys.LeftWindows);
 			what(ImGuiKey.RightSuper, Keys.RightWindows);
-			what(ImGuiKey.A, Keys.A);
-			what(ImGuiKey.L, Keys.L);
-			what(ImGuiKey.C, Keys.C);
-			what(ImGuiKey.V, Keys.V);
-			what(ImGuiKey.X, Keys.X);
-			what(ImGuiKey.Y, Keys.Y);
-			what(ImGuiKey.Z, Keys.Z);
-			what(ImGuiKey.H, Keys.H);
-			what(ImGuiKey.V, Keys.V);
-			what(ImGuiKey.W, Keys.W);
+
+			for (int i = 0; i < 25; i++)
+			{
+				what(ImGuiKey.A + i, Keys.A + i);
+			}
 
 			// MonoGame-specific //////////////////////
 			_game.Window.TextInput += (s, a) =>
@@ -240,7 +229,7 @@ namespace Editor.Gui
 
 			_effect.World = Matrix.Identity;
 			_effect.View = Matrix.Identity;
-			_effect.Projection = Matrix.CreateOrthographicOffCenter(offset, io.DisplaySize.X + offset, io.DisplaySize.Y + offset, offset, -1f, 1f);
+			_effect.Projection = Matrix.CreateOrthographicOffCenter(offset, io.DisplaySize.X + offset, io.DisplaySize.Y + offset, offset, 0, -1f);
 			_effect.TextureEnabled = true;
 			_effect.Texture = texture;
 			_effect.VertexColorEnabled = true;
@@ -395,7 +384,7 @@ namespace Editor.Gui
 				{
 					ImDrawCmdPtr drawCmd = cmdList.CmdBuffer[cmdi];
 
-					if (!_loadedTextures.TryGetValue(drawCmd.TextureId, out Texture2D value))
+					if (!loadedTextures.TryGetValue(drawCmd.TextureId, out Texture2D value))
 					{
 						throw new InvalidOperationException($"Could not find a texture with id '{drawCmd.TextureId}', please check your bindings");
 					}
@@ -429,5 +418,13 @@ namespace Editor.Gui
 			}
 		}
 		#endregion Internals
+
+		public Texture2D GetTexture(IntPtr id)
+		{
+			if (loadedTextures.TryGetValue(id, out Texture2D texture))
+				return texture;
+
+			return loadedTextures.Count > 0 ? loadedTextures[0] : null;
+		}
 	}
 }

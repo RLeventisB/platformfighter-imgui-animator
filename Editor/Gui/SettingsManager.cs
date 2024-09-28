@@ -2,10 +2,7 @@
 
 using ImGuiNET;
 
-using Microsoft.Xna.Framework.Graphics;
-
 using System.Collections;
-using System.Collections.Generic;
 using System.IO;
 
 namespace Editor.Gui
@@ -31,6 +28,8 @@ namespace Editor.Gui
 		public static BoolSetting ShowNewFrameUponMovingKeyframes = new BoolSetting(3, "Mostrar frame nuevo al mover keyframes");
 		public static BoolSetting PlayOnKeyframeSelect = new BoolSetting(4, "Reproducir al seleccionar keyframe");
 		public static BoolSetting LockToolWindows = new BoolSetting(5, "Fijar la posicion y tamaño de las ventanas de herramientas");
+		public static BoolSetting SetKeyframeOnModify = new BoolSetting(6, "Al cambiar un valor, asignar instantaneamente el valor al keyframe");
+		public static string lastProjectSavePath;
 		public static BoolSetting[] Settings =>
 		[
 			ShowPositionLinks,
@@ -38,7 +37,8 @@ namespace Editor.Gui
 			ConfirmOnNewProject,
 			ShowNewFrameUponMovingKeyframes,
 			PlayOnKeyframeSelect,
-			LockToolWindows
+			LockToolWindows,
+			SetKeyframeOnModify
 		];
 
 		public static void LoadProject(string filePath)
@@ -65,11 +65,9 @@ namespace Editor.Gui
 
 								for (int i = 0; i < counter; i++)
 								{
-									string key = reader.ReadString();
-									string path = reader.ReadString();
-									Texture2D texture = Texture2D.FromFile(EditorApplication.Graphics, path);
+									TextureFrame frame = TextureFrame.Load(reader);
 
-									EditorApplication.State.Textures.Add(key, new TextureFrame(key, texture, path, reader.ReadPoint(), reader.ReadPoint(), reader.ReadNVector2()));
+									EditorApplication.State.Textures.Add(frame.Name, frame);
 								}
 
 								counter = reader.ReadInt32();
@@ -77,13 +75,9 @@ namespace Editor.Gui
 
 								for (int i = 0; i < counter; i++)
 								{
-									string name = reader.ReadString();
-									string textureId = reader.ReadString();
-									TextureEntity entity = new TextureEntity(name, textureId);
+									TextureAnimationObject animationObject = TextureAnimationObject.Load(reader);
 
-									ReadSavedKeyframes(reader, entity);
-
-									EditorApplication.State.GraphicEntities.Add(name, entity);
+									EditorApplication.State.GraphicEntities.Add(animationObject.Name, animationObject);
 								}
 
 								counter = reader.ReadInt32();
@@ -91,21 +85,9 @@ namespace Editor.Gui
 
 								for (int i = 0; i < counter; i++)
 								{
-									string name = reader.ReadString();
-									HitboxEntity entity = new HitboxEntity(name);
-									entity.SpawnFrame = reader.ReadInt32();
-									entity.FrameDuration = reader.ReadUInt16();
-									entity.Position = reader.ReadVector2();
-									entity.Size = reader.ReadVector2();
-									int tagCount = reader.ReadInt32();
-									entity.Tags.EnsureCapacity(tagCount);
+									HitboxAnimationObject hitboxObject = HitboxAnimationObject.Load(reader);
 
-									for (int j = 0; j < tagCount; j++)
-									{
-										entity.Tags.Add(reader.ReadString());
-									}
-
-									EditorApplication.State.HitboxEntities.Add(name, entity);
+									EditorApplication.State.HitboxEntities.Add(hitboxObject.Name, hitboxObject);
 								}
 
 								break;
@@ -116,64 +98,7 @@ namespace Editor.Gui
 				}
 			}
 
-			void ReadSavedKeyframes(BinaryReader reader, TextureEntity entity)
-			{
-				int propertyCount = reader.ReadInt32();
-				List<KeyframeableValue> values = entity.EnumerateKeyframeableValues();
-
-				for (int j = 0; j < propertyCount; j++)
-				{
-					int keyframeCount = reader.ReadInt32();
-					KeyframeableValue value = values[j];
-
-					for (int k = 0; k < keyframeCount; k++)
-					{
-						int frame = reader.ReadInt32();
-						object data = null;
-
-						switch (value.DefaultValue)
-						{
-							case float:
-								data = reader.ReadSingle();
-
-								break;
-							case int:
-								data = reader.ReadInt32();
-
-								break;
-							case Vector2:
-								data = reader.ReadVector2();
-
-								break;
-						}
-
-						Keyframe keyframe = new Keyframe(value, frame, data);
-						value.Add(keyframe);
-					}
-
-					int linksCount = reader.ReadInt32();
-
-					for (int k = 0; k < linksCount; k++)
-					{
-						List<Keyframe> keyframesInLink = new List<Keyframe>();
-						InterpolationType type = (InterpolationType)reader.ReadByte();
-						bool relativeThing = reader.ReadBoolean();
-						keyframeCount = reader.ReadInt32();
-
-						for (int l = 0; l < keyframeCount; l++)
-						{
-							int frame = reader.ReadInt32();
-							keyframesInLink.Add(value.GetKeyframe(frame));
-						}
-
-						value.AddLink(new KeyframeLink(value, keyframesInLink)
-						{
-							InterpolationType = type,
-							UseRelativeProgressCalculation = relativeThing
-						});
-					}
-				}
-			}
+			lastProjectSavePath = filePath;
 		}
 
 		public static void SaveProject(string filePath)
@@ -189,89 +114,28 @@ namespace Editor.Gui
 
 					writer.Write(EditorApplication.State.Textures.Count);
 
-					foreach (KeyValuePair<string, TextureFrame> texture in EditorApplication.State.Textures)
+					foreach (TextureFrame texture in EditorApplication.State.Textures.Values)
 					{
-						writer.Write(texture.Key);
-						writer.Write(texture.Value.Path);
-						writer.Write(texture.Value.FrameSize);
-						writer.Write(texture.Value.FramePosition);
-						writer.Write(texture.Value.Pivot);
+						texture.Save(writer);
 					}
 
 					writer.Write(EditorApplication.State.GraphicEntities.Count);
 
-					foreach (TextureEntity entity in EditorApplication.State.Animator.RegisteredGraphics)
+					foreach (TextureAnimationObject entity in EditorApplication.State.Animator.RegisteredGraphics)
 					{
-						writer.Write(entity.Name);
-						writer.Write(entity.TextureName);
-
-						SaveEntityKeyframes(entity, writer);
+						entity.Save(writer);
 					}
 
 					writer.Write(EditorApplication.State.HitboxEntities.Count);
 
-					foreach (HitboxEntity entity in EditorApplication.State.Animator.RegisteredHitboxes)
+					foreach (HitboxAnimationObject entity in EditorApplication.State.Animator.RegisteredHitboxes)
 					{
-						writer.Write(entity.Name);
-						writer.Write(entity.SpawnFrame);
-						writer.Write(entity.FrameDuration);
-						writer.Write(entity.Position);
-						writer.Write(entity.Size);
-						writer.Write(entity.Tags.Count);
-
-						foreach (string tag in entity.Tags)
-						{
-							writer.Write(tag);
-						}
+						entity.Save(writer);
 					}
 				}
 			}
 
-			void SaveEntityKeyframes(TextureEntity entity, BinaryWriter writer)
-			{
-				List<KeyframeableValue> values = entity.EnumerateKeyframeableValues();
-				writer.Write(values.Count);
-
-				foreach (KeyframeableValue value in values)
-				{
-					writer.Write(value.KeyframeCount);
-
-					foreach (Keyframe keyframe in value.keyframes)
-					{
-						writer.Write(keyframe.Frame);
-
-						switch (keyframe.Value)
-						{
-							case float floatValue:
-								writer.Write(floatValue);
-
-								break;
-							case int intValue:
-								writer.Write(intValue);
-
-								break;
-							case Vector2 vector2Value:
-								writer.Write(vector2Value);
-
-								break;
-						}
-					}
-
-					writer.Write(value.links.Count);
-
-					foreach (KeyframeLink link in value.links)
-					{
-						writer.Write((byte)link.InterpolationType);
-						writer.Write(link.UseRelativeProgressCalculation);
-						writer.Write(link.Keyframes.Count);
-
-						foreach (Keyframe linkKeyframes in link.Keyframes)
-						{
-							writer.Write(linkKeyframes.Frame);
-						}
-					}
-				}
-			}
+			lastProjectSavePath = filePath;
 		}
 
 		public static void Initialize()
@@ -284,6 +148,7 @@ namespace Editor.Gui
 			ShowNewFrameUponMovingKeyframes.Set(true);
 			PlayOnKeyframeSelect.Set(true);
 			LockToolWindows.Set(false);
+			SetKeyframeOnModify.Set(false);
 
 			if (!File.Exists("./settings.dat"))
 				return;
@@ -363,11 +228,9 @@ namespace Editor.Gui
 
 		public static void DrawSettingsPopup()
 		{
-			ImGui.SetNextWindowContentSize(NVector2.One * 600);
-
 			bool popupOpen = true;
 
-			if (ImGui.BeginPopupModal("Settings", ref popupOpen, ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse | ImGuiWindowFlags.NoDocking))
+			if (ImGui.BeginPopupModal("Settings", ref popupOpen, ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse | ImGuiWindowFlags.NoDocking))
 			{
 				foreach (BoolSetting setting in Settings)
 				{

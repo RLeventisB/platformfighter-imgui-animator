@@ -1,25 +1,27 @@
 ﻿using ImGuiNET;
 
 using System;
+using System.Linq;
 
 namespace Editor.Gui
 {
 	public partial class ImGuiEx
 	{
-		private static int selectedTexture;
+		public static int selectedTextureOnEntityCreator;
 		public static string entityName = string.Empty;
 
 		public static void DoEntityCreatorReset()
 		{
-			selectedTexture = 0;
+			selectedTextureOnEntityCreator = 0;
 			entityName = "Sprite" + EditorApplication.State.GraphicEntities.Count;
 		}
 
-		public static void DoEntityCreatorModal(string[] textureNames, Action<string, string> onCreatePressed)
+		public static void DoEntityCreatorModal(Action<string, string> onCreatePressed)
 		{
 			bool open_create_sprite = true;
 			NVector2 ch = ImGui.GetContentRegionAvail();
 			float frameHeight = ch.Y - (ImGui.GetTextLineHeight() + ImGui.GetStyle().WindowPadding.Y * 1.5f);
+			string[] textureNames = EditorApplication.State.Textures.Keys.ToArray();
 
 			if (ImGui.BeginPopupModal("Create entity", ref open_create_sprite, ImGuiWindowFlags.NoResize))
 			{
@@ -34,9 +36,9 @@ namespace Editor.Gui
 							bool selected = false;
 							string textureName = textureNames[j];
 
-							if (ImGui.Selectable(textureName, ref selected, ImGuiSelectableFlags.AllowDoubleClick))
+							if (ImGui.Selectable(textureName + "##select", ref selected, ImGuiSelectableFlags.AllowDoubleClick))
 							{
-								selectedTexture = j;
+								selectedTextureOnEntityCreator = j;
 
 								if (ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
 								{
@@ -55,9 +57,9 @@ namespace Editor.Gui
 					ImGui.EndChild();
 				}
 
-				if (ImGui.Button("Create entity##2"))
+				if (ImGui.Button("Create entity##button creator"))
 				{
-					onCreatePressed?.Invoke(entityName, textureNames[selectedTexture]);
+					onCreatePressed?.Invoke(entityName, textureNames[selectedTextureOnEntityCreator]);
 
 					ImGui.CloseCurrentPopup();
 				}

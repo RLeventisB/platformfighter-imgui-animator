@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 
 namespace Editor.Gui
 {
@@ -13,21 +12,22 @@ namespace Editor.Gui
 			private DirectoryInfo _currentFolderInfo = null;
 			public string ActionButtonLabel;
 			public readonly string StartingFolder;
-			public string FolderModifications;
-			public string AssemblyPath;
+			public string DefaultExtensionOnCreate;
 			public string SelectedFileName;
 			public string SearchFilter;
 			public FileInfo SelectedFileInfo;
 			public List<FileInfo> FolderFiles = new List<FileInfo>();
 			public List<DirectoryInfo> FolderFolders = new List<DirectoryInfo>(); // lol
 
-			public FilePickerDefinition(string actionButtonLabel, string searchFilter)
+			public FilePickerDefinition(string actionButtonLabel, string searchFilter, string defaultExtensionOnCreate)
 			{
 				ActionButtonLabel = actionButtonLabel;
 				SearchFilter = searchFilter;
 				StartingFolder = AppContext.BaseDirectory;
-				FolderModifications = ".";
-				AssemblyPath = Path.GetDirectoryName(Assembly.GetEntryAssembly()?.Location);
+				DefaultExtensionOnCreate = defaultExtensionOnCreate;
+
+				// FolderModifications = ".";
+				// AssemblyPath = Path.GetDirectoryName(Assembly.GetEntryAssembly()?.Location);
 				SelectFolder(new DirectoryInfo(StartingFolder));
 			}
 
@@ -53,11 +53,16 @@ namespace Editor.Gui
 			public string SelectedFileFullPath => SelectedFileInfo.FullName;
 			public DirectoryInfo CurrentFolderInfo => _currentFolderInfo;
 			public string CurrentFolderPath => _currentFolderInfo.FullName;
+
+			public void CreateDummyFile(FileInfo fileInfo)
+			{
+				SelectedFileInfo = fileInfo;
+			}
 		}
 
-		public static FilePickerDefinition CreateFilePickerDefinition(string actionLabel, string searchFilter = "*.*")
+		public static FilePickerDefinition CreateFilePickerDefinition(string actionLabel, string defaultExtension, string searchFilter = "*.*")
 		{
-			FilePickerDefinition fp = new FilePickerDefinition(actionLabel, searchFilter);
+			FilePickerDefinition fp = new FilePickerDefinition(actionLabel, searchFilter, defaultExtension);
 
 			return fp;
 		}

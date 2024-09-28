@@ -9,132 +9,117 @@ namespace Editor.Gui
 {
 	public static class WorldActions
 	{
-		public static IEntity HoveredEntity; // not intended for external use btw yes i need this note to remember
-
 		public static void Draw()
 		{
-			bool popupOpen = ImGui.IsPopupOpen("EntityContextMenuPopup");
-			if (!popupOpen)
-				HoveredEntity = null;
+			bool windowFocused = ImGui.IsWindowHovered();
+			bool selectedObjectBeingHovered = false;
+			bool selectedObjectOrActionsWasHovered = false;
+			bool selectedObjectIsBeingDragged = false;
 
-			if (Timeline.HitboxMode)
-			{
-				foreach (HitboxEntity entity in EditorApplication.State.HitboxEntities.Values)
-				{
-					if (!entity.IsBeingHovered(Input.MouseWorld, EditorApplication.State.Animator.CurrentKeyframe))
-						continue;
-
-					if (ImGui.IsMouseClicked(ImGuiMouseButton.Left))
-						EditorApplication.selectedData = new SelectionData(entity);
-
-					if (!popupOpen)
-					{
-						HoveredEntity = entity;
-					}
-
-					break;
-				}
-			}
-			else
-			{
-				foreach (TextureEntity entity in EditorApplication.State.GraphicEntities.Values)
-				{
-					if (!entity.IsBeingHovered(Input.MouseWorld, EditorApplication.State.Animator.CurrentKeyframe))
-						continue;
-
-					EditorApplication.hoveredEntityName = entity.Name;
-					if (ImGui.IsMouseClicked(ImGuiMouseButton.Left))
-						EditorApplication.selectedData = new SelectionData(entity);
-
-					if (!popupOpen)
-					{
-						HoveredEntity = entity;
-					}
-
-					break;
-				}
-			}
-
-			if (ImGui.IsWindowFocused())
+			if (windowFocused)
 			{
 				if (ImGui.IsMouseDragging(ImGuiMouseButton.Right))
 				{
-					Camera.Move(new Vector3(-Input.MouseWorldDelta.X, -Input.MouseWorldDelta.Y, 0));
+					Camera.Position += Input.MouseWorldDelta;
 				}
 
-				if (ImGui.IsMouseDown(ImGuiMouseButton.Left) && HoveredEntity != null) // for some reasn ismouseclicked doesnt function on the first frame
+				if (ImGui.GetIO().MouseWheel != 0)
 				{
-					string name = HoveredEntity.Name;
-
-					if (HoveredEntity is TextureEntity)
-					{
-						EditorApplication.SetDragAction(new DelegateDragAction("MoveGraphicEntityObject",
-							delegate
-							{
-								TextureEntity selectedTextureEntity = EditorApplication.State.GraphicEntities[name];
-								selectedTextureEntity.Position.SetKeyframeValue(EditorApplication.State.Animator.CurrentKeyframe, selectedTextureEntity.Position.CachedValue + Input.MouseWorldDelta);
-							}));
-					}
-					else if (HoveredEntity is HitboxEntity hitboxEntity)
-					{
-						HitboxLine selectedLine = hitboxEntity.GetSelectedLine(Input.MouseWorld);
-
-						if (selectedLine == HitboxLine.None)
-						{
-							EditorApplication.SetDragAction(new DelegateDragAction("MoveHitboxEntityObject",
-								delegate
-								{
-									HitboxEntity selectedTextureEntity = EditorApplication.State.HitboxEntities[name];
-									selectedTextureEntity.Position += Input.MouseWorldDelta;
-								}));
-						}
-						else
-						{
-							EditorApplication.SetDragAction(new HitboxMoveSizeDragAction(selectedLine, hitboxEntity));
-						}
-					}
+					Camera.Zoom.Target += ImGui.GetIO().MouseWheel;
+					Camera.Zoom.Target = MathHelper.Clamp(Camera.Zoom.Target, 0.1f, 30f);
 				}
 			}
 
-			bool hovered = EntityActions.DoGraphicEntityActions(EditorApplication.selectedData);
-
-			if (ImGui.IsWindowFocused() && ImGui.IsWindowHovered())
+			if (!EditorApplication.selectedData.IsEmpty())
 			{
-				if (ImGui.IsMouseClicked(ImGuiMouseButton.Left) && !hovered)
+				// check if the current object is selected!!
+				if (EditorApplication.selectedData.ObjectSelectionType is SelectionType.Graphic or SelectionType.Hitbox)
+				{
+					string name = EditorApplication.selectedData.Name;
+					selectedObjectIsBeingDragged = EditorApplication.currentDragAction is not null && EditorApplication.currentDragAction.ActionName is "MoveGraphicEntityObject" or "MoveHitboxEntityObject";
+					selectedObjectBeingHovered = EditorApplication.selectedData.Reference.IsBeingHovered(Input.MouseWorld, EditorApplication.State.Animator.CurrentKeyframe);
+
+					if ((ImGui.IsMouseDragging(ImGuiMouseButton.Left) || ImGui.IsMouseClicked(ImGuiMouseButton.Left)) && selectedObjectBeingHovered && windowFocused)
+					{
+						switch (EditorApplication.selectedData.Reference)
+						{
+							case TextureAnimationObject:
+								EditorApplication.SetDragAction(new DelegateDragAction("MoveGraphicEntityObject",
+									delegate
+									{
+										TextureAnimationObject selectedTextureAnimationObject = EditorApplication.State.GraphicEntities[name];
+										selectedTextureAnimationObject.Position.SetKeyframeValue(EditorApplication.State.Animator.CurrentKeyframe, selectedTextureAnimationObject.Position.CachedValue + Input.MouseWorldDelta);
+									}));
+
+								break;
+							case HitboxAnimationObject hitboxEntity:
+							{
+								HitboxLine selectedLine = hitboxEntity.GetSelectedLine(Input.MouseWorld);
+
+								if (selectedLine == HitboxLine.None)
+								{
+									EditorApplication.SetDragAction(new DelegateDragAction("MoveHitboxEntityObject",
+										delegate
+										{
+											HitboxAnimationObject selectedTextureAnimationObject = EditorApplication.State.HitboxEntities[name];
+											selectedTextureAnimationObject.Position += Input.MouseWorldDelta;
+										}));
+								}
+								else
+								{
+									EditorApplication.SetDragAction(new HitboxMoveSizeDragAction(selectedLine, hitboxEntity));
+								}
+
+								break;
+							}
+						}
+					}
+
+					selectedObjectOrActionsWasHovered = EntityActions.DoGraphicEntityActions(EditorApplication.selectedData) || selectedObjectBeingHovered;
+				}
+			}
+
+			if (windowFocused)
+			{
+				bool canSelectNewObject = ImGui.IsMouseClicked(ImGuiMouseButton.Left) && !selectedObjectOrActionsWasHovered;
+
+				if (canSelectNewObject) // search for new selected object, didnt wanna do two loops though
 				{
 					EditorApplication.selectedData.Empty();
+				}
 
-					if (Timeline.HitboxMode)
+				if (Timeline.HitboxMode)
+				{
+					foreach (HitboxAnimationObject entity in EditorApplication.State.Animator.RegisteredHitboxes)
 					{
-						foreach (HitboxEntity entity in EditorApplication.State.Animator.RegisteredHitboxes)
-						{
-							if (!entity.IsBeingHovered(Input.MouseWorld, EditorApplication.State.Animator.CurrentKeyframe))
-								continue;
+						if (!entity.IsBeingHovered(Input.MouseWorld, EditorApplication.State.Animator.CurrentKeyframe))
+							continue;
 
+						if (canSelectNewObject)
 							EditorApplication.selectedData = new SelectionData(entity);
 
-							break;
-						}
+						break;
 					}
-					else
+				}
+				else
+				{
+					foreach (TextureAnimationObject entity in EditorApplication.State.Animator.RegisteredGraphics)
 					{
-						foreach (TextureEntity entity in EditorApplication.State.Animator.RegisteredGraphics)
-						{
-							if (!entity.IsBeingHovered(Input.MouseWorld, EditorApplication.State.Animator.CurrentKeyframe))
-								continue;
+						if (!entity.IsBeingHovered(Input.MouseWorld, EditorApplication.State.Animator.CurrentKeyframe))
+							continue;
 
+						if (canSelectNewObject)
 							EditorApplication.selectedData = new SelectionData(entity);
 
-							break;
-						}
+						if (!selectedObjectIsBeingDragged && !selectedObjectOrActionsWasHovered)
+							EditorApplication.hoveredEntityName = entity.Name;
+
+						break;
 					}
 				}
 			}
 
-			if (HoveredEntity == null)
-				return;
-
-			if (ImGui.BeginPopupContextWindow("EntityContextMenuPopup", ImGuiPopupFlags.MouseButtonRight | ImGuiPopupFlags.AnyPopup))
+			if (ImGui.IsWindowFocused() && ImGui.BeginPopupContextWindow("EntityContextMenuPopup", ImGuiPopupFlags.MouseButtonRight | ImGuiPopupFlags.AnyPopup))
 			{
 				ImGui.Text("cuidado");
 				ImGui.EndPopup();

@@ -24,7 +24,7 @@ namespace Editor.Gui
 		public static NVector2 timelineRegionMin;
 		public static NVector2 timelineRegionMax;
 
-		public static float timelineZoom = 1, timelineZoomTarget = 1;
+		public static DampedValue TimelineZoom = 1;
 		public static int currentLegendWidth;
 
 		public static int visibleStartingFrame;
@@ -128,9 +128,9 @@ namespace Editor.Gui
 				ImGui.SameLine();
 				ImGui.SetNextItemWidth(48f);
 
-				// var zoom = timelineZoomTarget;
-				ImGui.DragFloat("##ZoomValue", ref timelineZoomTarget, 0.1f, 0.1f, 5f);
-				timelineZoomTarget = MathHelper.Clamp(timelineZoomTarget, 0.1f, 5f);
+				float zoomTarget = TimelineZoom.Target;
+				if(ImGui.DragFloat("##ZoomValue", ref zoomTarget, 0.1f, 0.1f, 5f, null, ImGuiSliderFlags.AlwaysClamp))
+					TimelineZoom.Target = zoomTarget;
 
 				ImGui.BeginChild("KeyframeViewer");
 				{
@@ -142,10 +142,10 @@ namespace Editor.Gui
 
 					ImGui.SameLine(currentLegendWidth);
 
-					float oldTimelineZoomTarget = timelineZoomTarget; // im lazy
+					float oldTimelineZoomTarget = zoomTarget; // im lazy
 					float headerHeightOrsmting = ImGui.GetItemRectSize().Y;
-					float endingFrame = visibleStartingFrame + (visibleEndingFrame - visibleStartingFrame) / timelineZoom;
-					bool isSelectedEntityValid = EditorApplication.selectedData.GetValue(out object selectedEntity) && EditorApplication.selectedData.ObjectSelectionType is SelectionType.Graphic or SelectionType.Hitbox;
+					float endingFrame = visibleStartingFrame + (visibleEndingFrame - visibleStartingFrame) / TimelineZoom;
+					bool isSelectedEntityValid = EditorApplication.selectedData.GetValue(out IAnimationObject selectedEntity) && EditorApplication.selectedData.ObjectSelectionType is SelectionType.Graphic or SelectionType.Hitbox;
 
 					DrawTimeline(animator, isSelectedEntityValid, style.ItemSpacing.Y, headerHeightOrsmting);
 
@@ -162,11 +162,11 @@ namespace Editor.Gui
 							switch (HitboxMode)
 							{
 								case true when EditorApplication.selectedData.ObjectSelectionType == SelectionType.Hitbox:
-									RenderSelectedHitboxData((HitboxEntity)selectedEntity, animator, endingFrame, headerHeightOrsmting, oldTimelineZoomTarget);
+									RenderSelectedHitboxData((HitboxAnimationObject)selectedEntity, animator, endingFrame, headerHeightOrsmting, oldTimelineZoomTarget);
 
 									break;
 								case false when EditorApplication.selectedData.ObjectSelectionType == SelectionType.Graphic:
-									RenderSelectedEntityKeyframes((TextureEntity)selectedEntity, animator, endingFrame, headerHeightOrsmting, oldTimelineZoomTarget);
+									RenderSelectedEntityKeyframes((TextureAnimationObject)selectedEntity, animator, endingFrame, headerHeightOrsmting, oldTimelineZoomTarget);
 
 									break;
 							}
@@ -182,21 +182,21 @@ namespace Editor.Gui
 			}
 		}
 
-		private static void RenderSelectedHitboxData(HitboxEntity selectedEntity, Animator animator, float endingFrame, float headerHeightOrsmting, float oldTimelineZoomTarget)
+		private static void RenderSelectedHitboxData(HitboxAnimationObject selectedAnimationObject, Animator animator, float endingFrame, float headerHeightOrsmting, float oldTimelineZoomTarget)
 		{
 			ImGui.Text("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
 		}
 
-		private static void RenderSelectedEntityKeyframes(TextureEntity selectedEntity, Animator animator, float endingFrame, float headerHeightOrsmting, float oldTimelineZoomTarget)
+		private static void RenderSelectedEntityKeyframes(TextureAnimationObject selectedAnimationObject, Animator animator, float endingFrame, float headerHeightOrsmting, float oldTimelineZoomTarget)
 		{
-			bool open = ImGui.TreeNodeEx(selectedEntity.Name, ImGuiTreeNodeFlags.DefaultOpen);
+			bool open = ImGui.TreeNodeEx(selectedAnimationObject.Name, ImGuiTreeNodeFlags.DefaultOpen);
 
 			ImGui.NextColumn();
 
 			// draw entity keyframes
 			for (int frame = visibleStartingFrame; frame < endingFrame; frame++)
 			{
-				if (animator.EntityHasKeyframeAtFrame(selectedEntity.Name, frame))
+				if (animator.EntityHasKeyframeAtFrame(selectedAnimationObject.Name, frame))
 				{
 					DrawMainKeyframe(frame);
 				}
@@ -209,7 +209,7 @@ namespace Editor.Gui
 				bool scrollingOnLink = false;
 				bool clickedLeft = ImGui.IsMouseClicked(ImGuiMouseButton.Left);
 
-				foreach (KeyframeableValue value in selectedEntity.EnumerateKeyframeableValues())
+				foreach (KeyframeableValue value in selectedAnimationObject.EnumerateKeyframeableValues())
 				{
 					ImGui.Text(value.Name);
 					ImGui.NextColumn();
@@ -343,7 +343,7 @@ namespace Editor.Gui
 
 				if (scrollingOnLink)
 				{
-					timelineZoomTarget = oldTimelineZoomTarget;
+					TimelineZoom.Target = oldTimelineZoomTarget;
 				}
 				else
 				{
@@ -372,7 +372,7 @@ namespace Editor.Gui
 
 						List<(KeyframeableValue, int)> keyframesToMove = new List<(KeyframeableValue, int)>();
 
-						foreach (KeyframeableValue value in selectedEntity.EnumerateKeyframeableValues())
+						foreach (KeyframeableValue value in selectedAnimationObject.EnumerateKeyframeableValues())
 						{
 							Keyframe keyframe = value.GetKeyframe(frame);
 
@@ -385,7 +385,7 @@ namespace Editor.Gui
 
 					if (ImGui.IsKeyDown(ImGuiKey.Delete))
 					{
-						foreach (KeyframeableValue value in selectedEntity.EnumerateKeyframeableValues())
+						foreach (KeyframeableValue value in selectedAnimationObject.EnumerateKeyframeableValues())
 						{
 							value.RemoveKeyframe(frame);
 						}
@@ -453,7 +453,6 @@ namespace Editor.Gui
 			timelineRegionMin = ImGui.GetCursorScreenPos();
 			timelineRegionMax = timelineRegionMin + headerSize;
 			timelineRegionMax.Y = timelineRegionMin.Y + contentRegion.Y;
-			timelineZoom = Math.Clamp(MathHelper.Lerp(timelineZoom, timelineZoomTarget, 0.1f), 0.1f, 5f);
 			ImGui.PushClipRect(timelineRegionMin, timelineRegionMax, false);
 			{
 				ImGui.InvisibleButton("##header-region", headerSize);
@@ -463,7 +462,7 @@ namespace Editor.Gui
 
 				if (hovered)
 				{
-					int hoveringFrame = GetFrameForTimelinePos((ImGui.GetMousePos().X - timelineRegionMin.X) / timelineZoom);
+					int hoveringFrame = GetFrameForTimelinePos((ImGui.GetMousePos().X - timelineRegionMin.X) / TimelineZoom);
 					ImGui.BeginTooltip();
 					ImGui.Text(hoveringFrame.ToString());
 					ImGui.EndTooltip();
@@ -504,20 +503,20 @@ namespace Editor.Gui
 					}
 					else
 					{
-						timelineZoomTarget += (int)ImGui.GetIO().MouseWheel * 0.3f;
-						timelineZoomTarget = Math.Clamp(timelineZoomTarget, 0, 5);
+						TimelineZoom.Target += (int)ImGui.GetIO().MouseWheel * 0.3f;
+						TimelineZoom.Target = Math.Clamp(TimelineZoom.Target, 0.1f, 5);
 						accumalatedPanningDeltaX = 0f;
 					}
 				}
 
 				// draw all timeline lines
-				float frames = (visibleEndingFrame - visibleStartingFrame) / timelineZoom;
+				float frames = (visibleEndingFrame - visibleStartingFrame) / TimelineZoom;
 
 				for (int f = 0; f < frames; f++)
 				{
 					int frame = f + visibleStartingFrame;
 					NVector2 lineStart = timelineRegionMin;
-					lineStart.X += LineStartOffset + f * PixelsPerFrame * timelineZoom;
+					lineStart.X += LineStartOffset + f * PixelsPerFrame * TimelineZoom;
 					NVector2 lineEnd = lineStart + NVector2.UnitY * headerSize.Y;
 
 					bool isMajorLine = frame % MajorLinePerLines == 0;
@@ -545,7 +544,7 @@ namespace Editor.Gui
 				}
 
 				// draw currentFrame line if within range
-				if (animator.CurrentKeyframe >= visibleStartingFrame && animator.CurrentKeyframe <= visibleEndingFrame / timelineZoom)
+				if (animator.CurrentKeyframe >= visibleStartingFrame && animator.CurrentKeyframe <= visibleEndingFrame / TimelineZoom)
 				{
 					NVector2 frameLineStart = timelineRegionMin;
 					frameLineStart.X += GetTimelinePosForFrame(animator.CurrentKeyframe);
@@ -637,9 +636,9 @@ namespace Editor.Gui
 			ImGui.GetWindowDrawList().AddRectFilled(min = position, max = position + size, color);
 		}
 
-		public static int GetFrameForTimelinePos(float x) => (int)(Math.Floor((x - LineStartOffset / timelineZoom) / PixelsPerFrame + 0.5f) + visibleStartingFrame);
+		public static int GetFrameForTimelinePos(float x) => (int)(Math.Floor((x - LineStartOffset / TimelineZoom) / PixelsPerFrame + 0.5f) + visibleStartingFrame);
 
-		public static float GetTimelinePosForFrame(int frame) => (frame - visibleStartingFrame) * PixelsPerFrame * timelineZoom + LineStartOffset;
+		public static float GetTimelinePosForFrame(int frame) => (frame - visibleStartingFrame) * PixelsPerFrame * TimelineZoom + LineStartOffset;
 	}
 
 	public class CreationLinkData
