@@ -1,4 +1,5 @@
-﻿using Editor.Gui;
+﻿using Editor.Graphics;
+using Editor.Gui;
 
 using Microsoft.Xna.Framework;
 
@@ -95,10 +96,10 @@ namespace Editor.Model
 		{
 			Vector2 position = Position.CachedValue;
 			Vector2 size = Size.CachedValue;
-			float topDistance = MathF.Abs(position.Y - size.Y / 2 - mouseWorld.Y);
-			float rightDistance = MathF.Abs(position.X + size.X / 2 - mouseWorld.X);
-			float bottomDistance = MathF.Abs(position.Y + size.Y / 2 - mouseWorld.Y);
-			float leftDistance = MathF.Abs(position.X - size.X / 2 - mouseWorld.X);
+			float topDistance = MathF.Abs(position.Y - size.Y / 2 - mouseWorld.Y) * Camera.Zoom;
+			float rightDistance = MathF.Abs(position.X + size.X / 2 - mouseWorld.X) * Camera.Zoom;
+			float bottomDistance = MathF.Abs(position.Y + size.Y / 2 - mouseWorld.Y) * Camera.Zoom;
+			float leftDistance = MathF.Abs(position.X - size.X / 2 - mouseWorld.X) * Camera.Zoom;
 			bool inXRange = mouseWorld.X > position.X - size.X / 2 && mouseWorld.X < position.X + size.X / 2;
 			bool inYRange = mouseWorld.Y > position.Y - size.Y / 2 && mouseWorld.Y < position.Y + size.Y / 2;
 

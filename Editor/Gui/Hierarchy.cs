@@ -153,7 +153,7 @@ namespace Editor.Gui
 				}
 
 				ImGui.SetItemTooltip("Cambiar a editor de hitboxes");
-				
+
 				ImGui.SameLine();
 
 				ImGui.SetNextItemShortcut(ImGuiKey.ModAlt | ImGuiKey.P, ImGuiInputFlags.RouteAlways);
@@ -166,12 +166,13 @@ namespace Editor.Gui
 				ImGui.SetItemTooltip("Acciones del proyecto\nShortcut: Alt + P");
 
 				popupOpen = true;
-				
+
 				if (ImGui.BeginPopupModal("Project actions", ref popupOpen, ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse | ImGuiWindowFlags.NoDocking))
 				{
 					ImGui.InputFloat2("Ajustar todas las posiciones por:", ref projectActionsPositionOffset);
 
 					ImGui.SetItemTooltip("Esto añade un valor constante a todas las posiciones de los objetos en el mundo.");
+
 					if (ImGui.Button("Cambiar posiciones"))
 					{
 						foreach (TextureAnimationObject textureobject in EditorApplication.State.Animator.RegisteredGraphics)
@@ -180,22 +181,27 @@ namespace Editor.Gui
 							{
 								keyframe.Value = (Vector2)keyframe.Value + projectActionsPositionOffset;
 							}
+
 							textureobject.Position.CacheValue(null);
 						}
+
 						foreach (HitboxAnimationObject hitboxObject in EditorApplication.State.Animator.RegisteredHitboxes)
 						{
 							foreach (Keyframe keyframe in hitboxObject.Position.keyframes)
 							{
 								keyframe.Value = (Vector2)keyframe.Value + projectActionsPositionOffset;
 							}
+
 							hitboxObject.Position.CacheValue(null);
 						}
+
 						projectActionsPositionOffset = NVector2.Zero;
 					}
-					
+
 					ImGui.InputFloat("Multiplicar tiempo global por:", ref projectActionsKeyframeMult);
 
 					ImGui.SetItemTooltip("Esto multiplica todas las variables relacionadas con el tiempo en el mundo por un valor.\nEsto incluye posicion de los fotograma claves, y las duraciones de las hitboxes.\nTener en cuenta que esto redondea valores, haciendolo \"lossy\"");
+
 					if (ImGui.Button("Multiplicar tiempo"))
 					{
 						foreach (TextureAnimationObject textureobject in EditorApplication.State.Animator.RegisteredGraphics)
@@ -206,9 +212,11 @@ namespace Editor.Gui
 								{
 									keyframe.Frame = (int)(keyframe.Frame * projectActionsKeyframeMult);
 								}
+
 								value.CacheValue(null);
 							}
 						}
+
 						foreach (HitboxAnimationObject hitboxObject in EditorApplication.State.Animator.RegisteredHitboxes)
 						{
 							foreach (KeyframeableValue value in hitboxObject.EnumerateKeyframeableValues())
@@ -217,14 +225,48 @@ namespace Editor.Gui
 								{
 									keyframe.Frame = (int)(keyframe.Frame * projectActionsKeyframeMult);
 								}
+
 								value.CacheValue(null);
 							}
 
 							hitboxObject.FrameDuration = (ushort)(hitboxObject.FrameDuration * projectActionsKeyframeMult);
 							hitboxObject.SpawnFrame = (ushort)(hitboxObject.SpawnFrame * projectActionsKeyframeMult);
 						}
+
 						projectActionsKeyframeMult = 1;
 					}
+
+					if (ImGui.Button("Mantener solo keyframes primarios"))
+					{
+						foreach (TextureAnimationObject textureobject in EditorApplication.State.Animator.RegisteredGraphics)
+						{
+							foreach (KeyframeableValue value in textureobject.EnumerateKeyframeableValues())
+							{
+								value.keyframes.RemoveAll(v => value.keyframes.IndexOf(v) > 0);
+								value.links.Clear();
+								if (value.keyframes.Count > 0)
+									value.keyframes[0].ContainingLink = null;
+
+								value.CacheValue(null);
+							}
+						}
+
+						foreach (HitboxAnimationObject hitboxObject in EditorApplication.State.Animator.RegisteredHitboxes)
+						{
+							foreach (KeyframeableValue value in hitboxObject.EnumerateKeyframeableValues())
+							{
+								value.keyframes.RemoveAll(v => value.keyframes.IndexOf(v) > 0);
+								value.links.Clear();
+								if (value.keyframes.Count > 0)
+									value.keyframes[0].ContainingLink = null;
+
+								value.CacheValue(null);
+							}
+						}
+					}
+
+					ImGui.SetItemTooltip("Borra los fotogramas que no son primarios, esto incluye los enlaces.\nSirve solo para tener la primera \"pose\"");
+
 					ImGui.EndPopup();
 				}
 			}
@@ -463,7 +505,7 @@ namespace Editor.Gui
 
 						HitboxAnimationObject newObject = new HitboxAnimationObject(entity);
 						newObject.Name = name;
-						
+
 						EditorApplication.State.HitboxEntities.Add(name, newObject);
 						EditorApplication.selectedData = new SelectionData(newObject);
 

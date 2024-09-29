@@ -151,6 +151,7 @@ namespace Editor
 						propertyId.CacheValue(state.Animator.CurrentKeyframe);
 					}
 				}
+
 				foreach (HitboxAnimationObject entity in State.HitboxEntities.Values)
 				{
 					foreach (KeyframeableValue propertyId in entity.EnumerateKeyframeableValues())
@@ -308,7 +309,14 @@ namespace Editor
 
 				Vector3 center = new Vector3(position, 0);
 				Vector3 size3d = new Vector3(size, 0);
-				primitiveBatch.DrawBox(center, size3d, entity.GetColor().MultiplyAlpha(0.2f));
+				Color color = entity.GetColor();
+
+				if (selectedData.IsOf(entity))
+				{
+					color = color.MultiplyRGB(1.4f);
+				}
+
+				primitiveBatch.DrawBox(center, size3d, color.MultiplyAlpha(0.2f));
 
 				HitboxLine selectedLine = selectedData.IsOf(entity) ? entity.GetSelectedLine(Input.MouseWorld) : HitboxLine.None;
 				Vector3[] points =
@@ -321,7 +329,7 @@ namespace Editor
 
 				for (int i = 0; i < 4; i++)
 				{
-					primitiveBatch.DrawLine(points[i], points[(i + 1) % 4], (int)selectedLine == i ? Color.Pink : entity.GetColor());
+					primitiveBatch.DrawLine(points[i], points[(i + 1) % 4], (int)selectedLine == i ? Color.Pink : color);
 				}
 			}
 

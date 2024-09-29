@@ -100,12 +100,6 @@ namespace Editor.Model
 				}
 			}
 
-			foreach (HitboxAnimationObject hitbox in RegisteredHitboxes)
-			{
-				if (hitbox.SpawnFrame < firstFrame)
-					firstFrame = hitbox.SpawnFrame;
-			}
-
 			return firstFrame == int.MaxValue ? 0 : firstFrame;
 		}
 
@@ -125,12 +119,6 @@ namespace Editor.Model
 					if (value[lastIndex].Frame > lastFrame)
 						lastFrame = value[lastIndex].Frame;
 				}
-			}
-
-			foreach (HitboxAnimationObject hitbox in RegisteredHitboxes)
-			{
-				if (hitbox.EndFrame > lastFrame)
-					lastFrame = hitbox.EndFrame;
 			}
 
 			return lastFrame == int.MinValue ? 0 : lastFrame;

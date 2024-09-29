@@ -55,15 +55,17 @@ namespace Editor.Gui
 				out float blX, out float blY,
 				out float brX, out float brY
 			);
-			
+
 			Vector2[] corners = { new Vector2(tlX, tlY), new Vector2(trX, trY), new Vector2(brX, brY), new Vector2(blX, blY) };
 
 			return WindingNumber(point, corners) != 0;
 		}
+
 		private static int WindingNumber(Vector2 point, Vector2[] corners)
 		{
 			int wn = 0;
-			for (int i = 0; i < corners.Length; i ++)
+
+			for (int i = 0; i < corners.Length; i++)
 			{
 				Vector2 c1 = corners[i];
 				Vector2 c2 = corners[(i + 1) % corners.Length];
@@ -79,6 +81,7 @@ namespace Editor.Gui
 						wn--;
 				}
 			}
+
 			return wn;
 		}
 
@@ -86,7 +89,7 @@ namespace Editor.Gui
 		{
 			return (x2 - x1) * (py - y1) - (y2 - y1) * (px - x1);
 		}
-		
+
 		public static unsafe object CloneWithoutReferences(this object obj)
 		{
 			Type underlyingType = obj.GetType();
@@ -99,10 +102,10 @@ namespace Editor.Gui
 					Unsafe.CopyBlock(&clone, &obj, (uint)Marshal.SizeOf(underlyingType));
 				}
 			}
-			
+
 			return clone;
 		}
-		
+
 		public static Vector2 Rotate(Vector2 v, float degrees)
 		{
 			switch (degrees % 360)
@@ -138,16 +141,16 @@ namespace Editor.Gui
 
 		public static Color MultiplyAlpha(this Color color, float multiplier)
 		{
-			color.A = (byte)(color.A * multiplier);
+			color.A = (byte)MathHelper.Clamp(color.A * multiplier, byte.MinValue, byte.MaxValue);
 
 			return color;
 		}
 
 		public static Color MultiplyRGB(this Color color, float multiplier)
 		{
-			color.R = (byte)Math.Min(color.R * multiplier, byte.MaxValue);
-			color.G = (byte)Math.Min(color.G * multiplier, byte.MaxValue);
-			color.B = (byte)Math.Min(color.B * multiplier, byte.MaxValue);
+			color.R = (byte)MathHelper.Clamp(color.R * multiplier, byte.MinValue, byte.MaxValue);
+			color.G = (byte)MathHelper.Clamp(color.G * multiplier, byte.MinValue, byte.MaxValue);
+			color.B = (byte)MathHelper.Clamp(color.B * multiplier, byte.MinValue, byte.MaxValue);
 
 			return color;
 		}
