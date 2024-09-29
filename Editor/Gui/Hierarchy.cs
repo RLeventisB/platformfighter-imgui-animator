@@ -132,16 +132,18 @@ namespace Editor.Gui
 
 				ImGui.SetNextItemShortcut(ImGuiKey.ModAlt | ImGuiKey.S, ImGuiInputFlags.RouteAlways);
 
-				ImGui.SetItemTooltip("Ve los ajust :)))\nShortcut: Alt + S");
-
 				if (ImGui.Button($"{IcoMoon.SettingsIcon}"))
 				{
 					ImGui.OpenPopup("Settings");
 				}
 
+				ImGui.SetItemTooltip("Ve los ajust :)))\nShortcut: Alt + S");
+
 				SettingsManager.DrawSettingsPopup();
 
 				ImGui.SameLine();
+
+				ImGui.SetNextItemShortcut(ImGuiKey.ModAlt | ImGuiKey.H, ImGuiInputFlags.RouteAlways);
 
 				if (ImGui.Checkbox("##Hitbox viewer mode", ref Timeline.HitboxMode))
 				{
@@ -164,11 +166,16 @@ namespace Editor.Gui
 			{
 				ImGui.Text($"{IcoMoon.ListIcon} Hierarchy");
 
-				DrawGraphicEntitiesHierarchy();
+				bool hoveredItem = false;
 
-				DrawHitboxEntitiesHierarchy();
+				hoveredItem |= DrawGraphicEntitiesHierarchy();
+
+				hoveredItem |= DrawHitboxEntitiesHierarchy();
 
 				DrawTextureHierarchy();
+
+				if (!hoveredItem)
+					EditorApplication.hoveredEntityName = string.Empty;
 
 				ImGui.Unindent();
 			}
@@ -273,7 +280,7 @@ namespace Editor.Gui
 			if (ImGui.BeginPopupModal("Renombrar textura", ref popupOpen, ImGuiWindowFlags.Modal | ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoResize))
 			{
 				ImGui.SetWindowSize(new NVector2(400, 100));
-				string input = SavedInput("Nuevo nombre:", string.Empty);
+				string input = SavedInput("Nuevo nombre:", string.Empty, out _);
 
 				ImGui.SetNextItemShortcut(ImGuiKey.Enter);
 
@@ -300,7 +307,7 @@ namespace Editor.Gui
 			}
 		}
 
-		private static void DrawHitboxEntitiesHierarchy()
+		private static bool DrawHitboxEntitiesHierarchy()
 		{
 			ImGui.BeginDisabled(!Timeline.HitboxMode);
 			bool itemHovered = false;
@@ -348,8 +355,9 @@ namespace Editor.Gui
 
 			bool changedSelectedObject = false;
 
-			foreach (HitboxAnimationObject entity in EditorApplication.State.HitboxEntities.Values)
+			for (int i = 0; i < EditorApplication.State.HitboxEntities.Count; i++)
 			{
+				HitboxAnimationObject entity = EditorApplication.State.HitboxEntities.Values.ToArray()[i];
 				bool selected = EditorApplication.selectedData.IsOf(entity);
 
 				if (ImGui.Selectable(entity.Name + "##hitbox", ref selected) && selected)
@@ -369,6 +377,37 @@ namespace Editor.Gui
 						continue;
 					}
 
+					if (ImGui.Button($"{IcoMoon.FolderOpenIcon} Duplicar"))
+					{
+						string name = entity.Name;
+
+						while (EditorApplication.State.HitboxEntities.ContainsKey(name))
+						{
+							name += Random.Shared.Next(0, 10);
+						}
+
+						HitboxAnimationObject newObject = new HitboxAnimationObject(entity);
+						newObject.Name = name;
+						
+						EditorApplication.State.HitboxEntities.Add(name, newObject);
+						EditorApplication.selectedData = new SelectionData(newObject);
+
+						ImGui.CloseCurrentPopup();
+
+						continue;
+					}
+
+					if (ImGui.Button($"{IcoMoon.HammerIcon} Renombrar"))
+					{
+						ResetSavedInput(entity.Name);
+						ImGui.CloseCurrentPopup();
+						ImGui.EndPopup();
+
+						ImGui.OpenPopup("Renombrar hitbox");
+
+						continue;
+					}
+
 					ImGui.EndPopup();
 				}
 
@@ -378,6 +417,37 @@ namespace Editor.Gui
 				itemHovered = true;
 			}
 
+			bool popupOpen = true;
+
+			if (ImGui.BeginPopupModal("Renombrar hitbox", ref popupOpen, ImGuiWindowFlags.Modal | ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoResize))
+			{
+				ImGui.SetWindowSize(new NVector2(400, 100));
+				string input = SavedInput("Nuevo nombre:", string.Empty, out _);
+
+				ImGui.SetNextItemShortcut(ImGuiKey.Enter);
+
+				if (ImGui.Button("Renombrar"))
+				{
+					if (EditorApplication.selectedData.ObjectSelectionType == SelectionType.Hitbox)
+					{
+						HitboxAnimationObject animationObject = (HitboxAnimationObject)EditorApplication.selectedData.Reference;
+						EditorApplication.RenameEntity(animationObject, input);
+					}
+
+					ImGui.CloseCurrentPopup();
+				}
+
+				ImGui.SetNextItemShortcut(ImGuiKey.Escape);
+				ImGui.SameLine();
+
+				if (ImGui.Button("Cancelar"))
+				{
+					ImGui.CloseCurrentPopup();
+				}
+
+				ImGui.EndPopup();
+			}
+
 			if (changedSelectedObject)
 			{
 				ResetSavedInput();
@@ -385,13 +455,12 @@ namespace Editor.Gui
 
 			ImGui.Unindent();
 
-			if (!itemHovered)
-				EditorApplication.hoveredEntityName = string.Empty;
-
 			ImGui.EndDisabled();
+
+			return itemHovered;
 		}
 
-		private static void DrawGraphicEntitiesHierarchy()
+		private static bool DrawGraphicEntitiesHierarchy()
 		{
 			ImGui.BeginDisabled(EditorApplication.State.Textures.Count == 0 || Timeline.HitboxMode);
 
@@ -459,7 +528,7 @@ namespace Editor.Gui
 
 						for (int index = 0; index < newEntityValues.Count; index++)
 						{
-							newEntityValues[index].CloneKeyframeData(originalEntityValues[index]);
+							newEntityValues[index].CloneKeyframeDataFrom(originalEntityValues[index]);
 						}
 
 						EditorApplication.State.GraphicEntities.Add(name, newObject);
@@ -489,8 +558,7 @@ namespace Editor.Gui
 
 			ImGui.Unindent();
 
-			if (!itemHovered)
-				EditorApplication.hoveredEntityName = string.Empty;
+			return itemHovered;
 		}
 
 		private static void DrawUiProperties()
@@ -513,7 +581,7 @@ namespace Editor.Gui
 				{
 					TextureAnimationObject textureObject = (TextureAnimationObject)obj;
 
-					string tempEntityName = SavedInput(string.Empty, textureObject.Name);
+					string tempEntityName = SavedInput(string.Empty, textureObject.Name, out _);
 					ImGui.SameLine();
 
 					if (ImGui.Button("Renombrar") && !EditorApplication.State.GraphicEntities.ContainsKey(tempEntityName))
@@ -594,12 +662,10 @@ namespace Editor.Gui
 						{
 							case ScaleProperty:
 							case PositionProperty:
-								Vector2 vector2 = ((Vector2KeyframeValue)keyframeableValue).CachedValue;
+								NVector2 vector2 = ((Vector2KeyframeValue)keyframeableValue).CachedValue.ToNumerics();
 
-								NVector2 newVector2 = new NVector2(vector2.X, vector2.Y);
-
-								if (ImGui.DragFloat2(keyframeableValue.Name, ref newVector2))
-									keyframeableValue.SetKeyframeValue(EditorApplication.State.Animator.CurrentKeyframe, (Vector2)newVector2);
+								if (ImGui.DragFloat2(keyframeableValue.Name, ref vector2))
+									keyframeableValue.SetKeyframeValue(null, (Vector2)vector2);
 
 								break;
 							case FrameIndexProperty:
@@ -610,7 +676,7 @@ namespace Editor.Gui
 								int framesY = texture.Height / texture.FrameSize.Y;
 
 								if (ImGui.SliderInt(keyframeableValue.Name, ref frameIndex, 0, framesX * framesY - 1))
-									keyframeableValue.SetKeyframeValue(EditorApplication.State.Animator.CurrentKeyframe, frameIndex);
+									keyframeableValue.SetKeyframeValue(null, frameIndex);
 
 								break;
 							case RotationProperty:
@@ -618,14 +684,14 @@ namespace Editor.Gui
 								rotation = MathHelper.ToDegrees(rotation);
 
 								if (ImGui.DragFloat(keyframeableValue.Name, ref rotation, 1f, float.MinValue, float.MaxValue, "%.0f deg", ImGuiSliderFlags.NoRoundToFormat))
-									keyframeableValue.SetKeyframeValue(EditorApplication.State.Animator.CurrentKeyframe, MathHelper.ToRadians(rotation));
+									keyframeableValue.SetKeyframeValue(null, MathHelper.ToRadians(rotation));
 
 								break;
 							case TransparencyProperty:
 								float transparency = ((FloatKeyframeValue)keyframeableValue).CachedValue;
 
 								if (ImGui.DragFloat(keyframeableValue.Name, ref transparency, 0.001f, 0, 1f, "%f", ImGuiSliderFlags.NoRoundToFormat))
-									keyframeableValue.SetKeyframeValue(EditorApplication.State.Animator.CurrentKeyframe, transparency);
+									keyframeableValue.SetKeyframeValue(null, transparency);
 
 								break;
 							case ZIndexProperty:
@@ -633,7 +699,7 @@ namespace Editor.Gui
 
 								if (ImGui.DragFloat(keyframeableValue.Name, ref zIndex, 0.01f, 0, float.MaxValue, "%f", ImGuiSliderFlags.AlwaysClamp))
 								{
-									keyframeableValue.SetKeyframeValue(EditorApplication.State.Animator.CurrentKeyframe, zIndex);
+									keyframeableValue.SetKeyframeValue(null, zIndex);
 								}
 
 								break;
@@ -648,15 +714,15 @@ namespace Editor.Gui
 					ImGui.PushItemWidth(WindowWidth * 0.5f);
 					HitboxAnimationObject hitboxObject = (HitboxAnimationObject)obj;
 
-					NVector2 newValue = hitboxObject.Position.ToNumerics();
+					NVector2 newValue = hitboxObject.Position.CachedValue.ToNumerics();
 
 					if (ImGui.DragFloat2("Position", ref newValue))
-						hitboxObject.Position = newValue;
+						hitboxObject.Position.SetKeyframeValue(null, (Vector2)newValue);
 
-					newValue = hitboxObject.Size.ToNumerics();
+					newValue = hitboxObject.Size.CachedValue.ToNumerics();
 
 					if (ImGui.DragFloat2("Size", ref newValue))
-						hitboxObject.Size = newValue;
+						hitboxObject.Size.SetKeyframeValue(null, (Vector2)newValue);
 
 					unsafe
 					{

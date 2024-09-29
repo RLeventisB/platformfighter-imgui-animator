@@ -91,13 +91,27 @@ namespace Editor.Model
 			{
 				lock (EditorApplication.ImguiRenderer.loadedTextures)
 				{
-					Texture2D texture = EditorApplication.ImguiRenderer.GetTexture(ImguiId);
-					EditorApplication.ImguiRenderer.UnbindTexture(ImguiId);
-					texture.Dispose();
+					int attempts = 0;
 
-					texture = Texture2D.FromFile(EditorApplication.Graphics, Path);
+					while (attempts < 10)
+					{
+						try
+						{
+							Texture2D texture = EditorApplication.ImguiRenderer.GetTexture(ImguiId);
+							EditorApplication.ImguiRenderer.UnbindTexture(ImguiId);
+							texture.Dispose();
 
-					EditorApplication.ImguiRenderer.loadedTextures[ImguiId] = texture;
+							texture = Texture2D.FromFile(EditorApplication.Graphics, Path);
+
+							EditorApplication.ImguiRenderer.loadedTextures[ImguiId] = texture;
+							attempts = 10;
+						}
+						catch (Exception e)
+						{
+							attempts++;
+							Thread.Sleep(100);
+						}
+					}
 				}
 			}
 
@@ -135,7 +149,7 @@ namespace Editor.Model
 			FramePosition = framePosition ?? Point.Zero;
 			Pivot = pivot ?? new NVector2(Texture.Width / 2f, Texture.Height / 2f);
 		}
-		
+
 		public TextureFrame(string name, Texture2D texture, Point frameSize, Point? framePosition = null, NVector2? pivot = null)
 		{
 			Name = name;
@@ -158,12 +172,15 @@ namespace Editor.Model
 			TextureManager.LoadTexture(Path, out nint id);
 			TextureId = id;
 		}
+
 		public static implicit operator Texture2D(TextureFrame f)
 		{
 			return f.Texture;
 		}
 
 		public bool IsBeingHovered(Vector2 mouseWorld, int frame) => false;
+
+		public List<KeyframeableValue> EnumerateKeyframeableValues() => [];
 
 		public void Dispose()
 		{

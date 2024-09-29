@@ -17,11 +17,11 @@ namespace Editor.Model
 		{
 		}
 
-		public Vector2KeyframeValue(TextureAnimationObject animationObject, Vector2 defaultValue, string name, bool createDefaultKeyframe = true) : base(animationObject, defaultValue, name, typeof(Vector2), createDefaultKeyframe)
+		public Vector2KeyframeValue(IAnimationObject animationObject, Vector2 defaultValue, string name, bool createDefaultKeyframe = true) : base(animationObject, defaultValue, name, typeof(Vector2), createDefaultKeyframe)
 		{
 		}
 
-		public Vector2 CachedValue => (Vector2)cachedValue.value;
+		public Vector2 CachedValue => (Vector2)(cachedValue.value ?? Vector2.Zero);
 
 		public Vector2 Interpolate(int frame)
 		{
@@ -51,11 +51,11 @@ namespace Editor.Model
 		{
 		}
 
-		public FloatKeyframeValue(TextureAnimationObject animationObject, float defaultValue, string name, bool createDefaultKeyframe = true) : base(animationObject, defaultValue, name, typeof(float), createDefaultKeyframe)
+		public FloatKeyframeValue(IAnimationObject animationObject, float defaultValue, string name, bool createDefaultKeyframe = true) : base(animationObject, defaultValue, name, typeof(float), createDefaultKeyframe)
 		{
 		}
 
-		public float CachedValue => (float)cachedValue.value;
+		public float CachedValue => (float)(cachedValue.value ?? 0);
 
 		public float Interpolate(int frame)
 		{
@@ -85,11 +85,11 @@ namespace Editor.Model
 		{
 		}
 
-		public IntKeyframeValue(TextureAnimationObject animationObject, int defaultValue, string name, bool createDefaultKeyframe = true) : base(animationObject, defaultValue, name, typeof(int), createDefaultKeyframe)
+		public IntKeyframeValue(IAnimationObject animationObject, int defaultValue, string name, bool createDefaultKeyframe = true) : base(animationObject, defaultValue, name, typeof(int), createDefaultKeyframe)
 		{
 		}
 
-		public int CachedValue => (int)cachedValue.value;
+		public int CachedValue => (int)(cachedValue.value ?? 0); // these nullability checks are for when the value is loading and it has nothing lol
 
 		public int Interpolate(int frame)
 		{
@@ -140,10 +140,10 @@ namespace Editor.Model
 		[JsonIgnore]
 		protected (object value, int frame) cachedValue;
 
-		public TextureAnimationObject Owner { get; init; }
+		public IAnimationObject Owner { get; init; }
 		public string Name { get; init; }
 
-		protected KeyframeableValue(TextureAnimationObject animationObject, object defaultValue, string name, Type type, bool createDefaultKeyframe = true) : this()
+		protected KeyframeableValue(IAnimationObject animationObject, object defaultValue, string name, Type type, bool createDefaultKeyframe = true) : this()
 		{
 			DefaultValue = defaultValue;
 			cachedValue = (DefaultValue, -1);
@@ -469,9 +469,10 @@ namespace Editor.Model
 			return null;
 		}
 
-		public Keyframe SetKeyframeValue(int frame, object data)
+		public Keyframe SetKeyframeValue(int? frame, object data)
 		{
-			Keyframe keyframe = new Keyframe(this, frame, data);
+			frame ??= EditorApplication.State.Animator.CurrentKeyframe;
+			Keyframe keyframe = new Keyframe(this, frame.Value, data);
 
 			if (SettingsManager.SetKeyframeOnModify)
 			{
@@ -481,7 +482,7 @@ namespace Editor.Model
 			}
 			else
 			{
-				cachedValue = (data, frame);
+				cachedValue = (data, frame.Value);
 			}
 
 			return keyframe;
@@ -509,7 +510,7 @@ namespace Editor.Model
 			return keyframes.IndexOf(keyframe);
 		}
 
-		public KeyframeableValue CloneKeyframeData(KeyframeableValue other)
+		public KeyframeableValue CloneKeyframeDataFrom(KeyframeableValue other)
 		{
 			foreach (Keyframe keyframe in other.keyframes)
 			{

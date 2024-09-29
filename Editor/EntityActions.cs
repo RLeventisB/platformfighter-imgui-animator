@@ -16,6 +16,34 @@ namespace Editor
 			if (!data.TryGetValue(out TextureAnimationObject entity))
 				return false;
 
+			Vector2 arrowMovement = Vector2.Zero;
+
+			if (ImGui.IsWindowFocused())
+			{
+				if (ImGui.IsKeyPressed(ImGuiKey.LeftArrow, true))
+				{
+					arrowMovement.X += -0.1f;
+				}
+
+				if (ImGui.IsKeyPressed(ImGuiKey.UpArrow, true))
+				{
+					arrowMovement.Y += -0.1f;
+				}
+
+				if (ImGui.IsKeyPressed(ImGuiKey.RightArrow, true))
+				{
+					arrowMovement.X += 0.1f;
+				}
+
+				if (ImGui.IsKeyPressed(ImGuiKey.DownArrow, true))
+				{
+					arrowMovement.Y += 0.1f;
+				}
+			}
+
+			if (arrowMovement != Vector2.Zero)
+				entity.Position.SetKeyframeValue(null, entity.Position.CachedValue + arrowMovement);
+
 			Vector2 worldPos = entity.Position.CachedValue;
 
 			float rotation = entity.Rotation.CachedValue;
@@ -42,7 +70,7 @@ namespace Editor
 			{
 				Vector2 diff = Input.MouseWorld - entity.Position.CachedValue;
 				float atan2 = MathF.Atan2(diff.Y, diff.X);
-				entity.Rotation.SetKeyframeValue(EditorApplication.State.Animator.CurrentKeyframe, atan2);
+				entity.Rotation.SetKeyframeValue(null, atan2);
 
 				ImGui.SetTooltip("Rotacion actual:\n" + MathHelper.ToDegrees(atan2));
 			}

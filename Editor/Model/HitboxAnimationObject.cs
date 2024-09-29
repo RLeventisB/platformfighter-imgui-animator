@@ -4,8 +4,6 @@ using Microsoft.Xna.Framework;
 
 using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace Editor.Model
@@ -13,14 +11,15 @@ namespace Editor.Model
 	public class HitboxAnimationObject : IAnimationObject
 	{
 		[JsonConstructor]
-		public HitboxAnimationObject() : this(null)
+		public HitboxAnimationObject() : this(string.Empty)
 		{
 		}
 
 		public HitboxAnimationObject(string name)
 		{
-			Size = Vector2.One * 16;
-			Position = Vector2.Zero;
+			Position = new Vector2KeyframeValue(this, Vector2.Zero, PositionProperty, false);
+			Size = new Vector2KeyframeValue(this, Vector2.One * 16, SizeProperty, false);
+
 			Name = name;
 			Damage = 5f; // how much damage does the hitbox deal
 			SpawnFrame = 0; // which frame does the hitbox spawn
@@ -45,16 +44,45 @@ namespace Editor.Model
 		public HitboxConditions Conditions;
 		public ushort Hitstun, MaxHitstun, ShieldStun, DuelGameLag, AttackId, ImmunityAfterHit, Priority, FrameDuration, SpawnFrame;
 		public float Damage, HitstunGrowth, LaunchAngle, LaunchPotency, LaunchPotencyGrowth, LaunchPotencyMax, ShieldLaunchAngle, ShieldPotency;
-		public Vector2 Size { get; set; }
+		public Vector2KeyframeValue Size { get; set; }
 		public string Name { get; set; }
-		public Vector2 Position { get; set; }
+		public Vector2KeyframeValue Position { get; set; }
 		public HitboxType Type;
 		public List<string> Tags = new List<string>();
+
+		public HitboxAnimationObject(HitboxAnimationObject clone)
+		{
+			Position = new Vector2KeyframeValue(this, Vector2.Zero, PositionProperty, false);
+			Size = new Vector2KeyframeValue(this, Vector2.One * 16, SizeProperty, false);
+
+			Position.CloneKeyframeDataFrom(clone.Position);
+			Size.CloneKeyframeDataFrom(clone.Position);
+			Name = clone.Name;
+			Damage = clone.Damage;
+			SpawnFrame = clone.SpawnFrame;
+			FrameDuration = clone.FrameDuration;
+			Hitstun = clone.Hitstun;
+			HitstunGrowth = clone.HitstunGrowth;
+			MaxHitstun = clone.MaxHitstun;
+			LaunchAngle = clone.LaunchAngle;
+			LaunchPotency = clone.LaunchPotency;
+			LaunchPotencyGrowth = clone.LaunchPotencyGrowth;
+			LaunchPotencyMax = clone.LaunchPotencyMax;
+			ShieldStun = clone.ShieldStun;
+			DuelGameLag = clone.DuelGameLag;
+			Conditions = clone.Conditions;
+			AttackId = clone.AttackId;
+			ImmunityAfterHit = clone.ImmunityAfterHit;
+			ShieldLaunchAngle = clone.ShieldLaunchAngle;
+			ShieldPotency = clone.ShieldPotency;
+			Priority = clone.Priority;
+		}
+
 		public int EndFrame => SpawnFrame + FrameDuration;
 
 		public bool IsBeingHovered(Vector2 mouseWorld, int frame)
 		{
-			return IsOnFrame(frame) && IsInsideRectangle(Position, Size, mouseWorld);
+			return IsOnFrame(frame) && IsInsideRectangle(Position.CachedValue, Size.CachedValue, mouseWorld);
 		}
 
 		public bool IsOnFrame(int frame)
@@ -64,23 +92,33 @@ namespace Editor.Model
 
 		public HitboxLine GetSelectedLine(Vector2 mouseWorld)
 		{
-			float topDistance = MathF.Abs(Position.Y - Size.Y / 2 - mouseWorld.Y);
-			float rightDistance = MathF.Abs(Position.X + Size.X / 2 - mouseWorld.X);
-			float bottomDistance = MathF.Abs(Position.Y + Size.Y / 2 - mouseWorld.Y);
-			float leftDistance = MathF.Abs(Position.X - Size.X / 2 - mouseWorld.X);
+			Vector2 position = Position.CachedValue;
+			Vector2 size = Size.CachedValue;
+			float topDistance = MathF.Abs(position.Y - size.Y / 2 - mouseWorld.Y);
+			float rightDistance = MathF.Abs(position.X + size.X / 2 - mouseWorld.X);
+			float bottomDistance = MathF.Abs(position.Y + size.Y / 2 - mouseWorld.Y);
+			float leftDistance = MathF.Abs(position.X - size.X / 2 - mouseWorld.X);
+			bool inXRange = mouseWorld.X > position.X - size.X / 2 && mouseWorld.X < position.X + size.X / 2;
+			bool inYRange = mouseWorld.Y > position.Y - size.Y / 2 && mouseWorld.Y < position.Y + size.Y / 2;
 
 			float min = Math.Min(Math.Min(topDistance, bottomDistance), Math.Min(rightDistance, leftDistance));
 
 			if (min > 2)
 				return HitboxLine.None;
 
-			if (min == topDistance)
+			if (min == topDistance && inXRange)
 				return HitboxLine.Top;
 
-			if (min == rightDistance)
+			if (min == rightDistance && inYRange)
 				return HitboxLine.Right;
 
-			return min == bottomDistance ? HitboxLine.Bottom : HitboxLine.Left;
+			if (min == bottomDistance && inXRange)
+				return HitboxLine.Bottom;
+
+			if (min == leftDistance && inXRange)
+				return HitboxLine.Left;
+
+			return HitboxLine.None;
 		}
 
 		public Color GetColor()
@@ -96,65 +134,7 @@ namespace Editor.Model
 			return Timeline.HitboxMode ? color : color.MultiplyAlpha(0.2f);
 		}
 
-		public void Save(Utf8JsonWriter writer)
-		{
-			/*writer.WriteStartObject();
-			writer.WriteString("name", Name);
-			writer.WriteVector2("position", Position);
-			writer.WriteVector2("size", Size);
-			writer.WriteEnum("hitbox_type", Type);
-			writer.WriteNumber("spawn_frame", SpawnFrame);
-			writer.WriteNumber("frame_duration", FrameDuration);
-			writer.WriteNumber("damage", Damage);
-			writer.WriteNumber("hitsun", Hitstun);
-			writer.WriteNumber("hitstun_growth", HitstunGrowth);
-			writer.WriteNumber("max_hitstun", MaxHitstun);
-			writer.WriteNumber("launch_angle", LaunchAngle);
-			writer.WriteNumber("launch_potency", LaunchPotency);
-			writer.WriteNumber("launch_potency_growth", LaunchPotencyGrowth);
-			writer.WriteNumber("launch_potency_max", LaunchPotencyMax);
-			writer.WriteNumber("shield_stun", ShieldStun);
-			writer.WriteNumber("1v1_lag", DuelGameLag);
-			writer.WriteEnum("conditions", Conditions);
-			writer.WriteNumber("attack_id", AttackId);
-			writer.WriteNumber("immunity_after_hit", ImmunityAfterHit);
-			writer.WriteNumber("shield_launch_angle", ShieldLaunchAngle);
-			writer.WriteNumber("shield_potency", ShieldPotency);
-			writer.WriteNumber("priority", Priority);
-
-			writer.WriteStartArray("tags");
-
-			foreach (string tag in Tags)
-			{
-				writer.WriteStringValue(tag);
-			}
-
-			writer.WriteEndArray();
-
-			writer.WriteEndObject();*/
-			writer.WriteRawValue(JsonSerializer.SerializeToUtf8Bytes(this, SettingsManager.DefaultSerializerOptions));
-		}
-
-		public static HitboxAnimationObject Load(BinaryReader reader)
-		{
-			string name = reader.ReadString();
-			HitboxAnimationObject hitbox = new HitboxAnimationObject(name);
-			hitbox.SpawnFrame = (ushort)reader.ReadInt32();
-			hitbox.FrameDuration = reader.ReadUInt16();
-			hitbox.Position = reader.ReadVector2();
-			hitbox.Size = reader.ReadVector2();
-
-			int tagCount = reader.ReadInt32();
-			hitbox.Tags.EnsureCapacity(tagCount);
-
-			for (int j = 0; j < tagCount; j++)
-			{
-				hitbox.Tags.Add(reader.ReadString());
-			}
-
-			return hitbox;
-		}
-		public List<KeyframeableValue> EnumerateKeyframeableValues() => [];
+		public List<KeyframeableValue> EnumerateKeyframeableValues() => [Position, Size];
 	}
 	public enum HitboxType : byte
 	{

@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+﻿using System.Collections.Generic;
 
 namespace Editor.Model
 {
@@ -8,6 +8,6 @@ namespace Editor.Model
 
 		public bool IsBeingHovered(Vector2 mouseWorld, int frame);
 
-		public void Save(Utf8JsonWriter writer);
+		public List<KeyframeableValue> EnumerateKeyframeableValues();
 	}
 }

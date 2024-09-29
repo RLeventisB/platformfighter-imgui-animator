@@ -20,9 +20,7 @@ namespace Editor.Gui
 		public const string TransparencyProperty = "Transparency";
 		public const string PositionProperty = "Position";
 		public const string ZIndexProperty = "ZIndex";
-		public const string SizeXProperty = "Size X";
-		public const string SizeYProperty = "Size Y";
-
+		public const string SizeProperty = "Size";
 		private static string savingInputString;
 
 		public static Vector3 AsVector3(this NVector2 vector2) => new Vector3(vector2.X, vector2.Y, 0);
@@ -34,8 +32,8 @@ namespace Editor.Gui
 			double localY = point.Y - position.Y;
 
 			// Rotate point around the rectangle center by the negative of the rectangle angle
-			double cosAngle = Math.Cos(-rotation);
-			double sinAngle = Math.Sin(-rotation);
+			(double sinAngle, double cosAngle) = Math.SinCos(-rotation);
+
 			double rotatedX = localX * cosAngle - localY * sinAngle;
 			double rotatedY = localX * sinAngle + localY * cosAngle;
 
@@ -44,6 +42,76 @@ namespace Editor.Gui
 			double halfHeight = size.Y / 2;
 
 			return Math.Abs(rotatedX) <= halfWidth && Math.Abs(rotatedY) <= halfHeight;
+		}
+
+		public static bool IsPointInsideRotatedRectangle(Vector2 center, Vector2 size, float rotation, Vector2 pivot, Vector2 point)
+		{
+			// ew chatgpt again (i am running out of time)
+			(float sin, float cos) = MathF.SinCos(rotation);
+			EditorApplication.GetQuadsPrimitive(center.X, center.Y, pivot.X, pivot.Y, size.X, size.Y, sin, cos,
+				out float tlX, out float tlY,
+				out float trX, out float trY,
+				out float blX, out float blY,
+				out float brX, out float brY
+			);
+			
+			Vector2[] corners = { new Vector2(tlX, tlY), new Vector2(trX, trY), new Vector2(brX, brY), new Vector2(blX, blY) };
+
+			return WindingNumber(point, corners) != 0;
+		}
+		private static int WindingNumber(Vector2 point, Vector2[] corners)
+		{
+			int wn = 0;
+			for (int i = 0; i < corners.Length; i ++)
+			{
+				Vector2 c1 = corners[i];
+				Vector2 c2 = corners[(i + 1) % corners.Length];
+
+				if (c1.Y <= point.Y)
+				{
+					if (c2.Y > point.Y && IsLeft(c1.X, c1.Y, c2.X, c2.Y, point.X, point.Y) > 0)
+						wn++;
+				}
+				else
+				{
+					if (c2.Y <= point.Y && IsLeft(c1.X, c1.Y, c2.X, c2.Y, point.X, point.Y) < 0)
+						wn--;
+				}
+			}
+			return wn;
+		}
+
+		private static float IsLeft(float x1, float y1, float x2, float y2, float px, float py)
+		{
+			return (x2 - x1) * (py - y1) - (y2 - y1) * (px - x1);
+		}
+		
+		public static Vector2 Rotate(Vector2 v, float degrees)
+		{
+			switch (degrees % 360)
+			{
+				case 0f:
+					return v;
+				case 90f:
+					(v.X, v.Y) = (-v.Y, v.X);
+
+					return v;
+				case 180f:
+					return -v;
+				case 270f:
+					(v.X, v.Y) = (v.Y, -v.X);
+
+					return v;
+				default:
+					(float Sin, float Cos) = MathF.SinCos(degrees * (MathHelper.Pi / 180f));
+
+					float tx = v.X;
+					float ty = v.Y;
+					v.X = Cos * tx - Sin * ty;
+					v.Y = Sin * tx + Cos * ty;
+
+					return v;
+			}
 		}
 
 		public static bool IsInsideRectangle(Vector2 position, Vector2 size, Vector2 point)
@@ -241,12 +309,12 @@ namespace Editor.Gui
 			return (value - min) / (max - min);
 		}
 
-		public static string SavedInput(string id, string defaultInput)
+		public static string SavedInput(string id, string defaultInput, out bool changed)
 		{
 			if (string.IsNullOrEmpty(savingInputString))
 				savingInputString = defaultInput;
 
-			ImGui.InputText(id, ref savingInputString, 64);
+			changed = ImGui.InputText(id, ref savingInputString, 64);
 
 			return savingInputString;
 		}

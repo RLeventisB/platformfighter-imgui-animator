@@ -48,7 +48,7 @@ namespace Editor.Gui
 									delegate
 									{
 										TextureAnimationObject selectedTextureAnimationObject = EditorApplication.State.GraphicEntities[name];
-										selectedTextureAnimationObject.Position.SetKeyframeValue(EditorApplication.State.Animator.CurrentKeyframe, selectedTextureAnimationObject.Position.CachedValue + Input.MouseWorldDelta);
+										selectedTextureAnimationObject.Position.SetKeyframeValue(null, selectedTextureAnimationObject.Position.CachedValue + Input.MouseWorldDelta);
 									}));
 
 								break;
@@ -62,7 +62,7 @@ namespace Editor.Gui
 										delegate
 										{
 											HitboxAnimationObject selectedTextureAnimationObject = EditorApplication.State.HitboxEntities[name];
-											selectedTextureAnimationObject.Position += Input.MouseWorldDelta;
+											selectedTextureAnimationObject.Position.SetKeyframeValue(null, selectedTextureAnimationObject.Position.CachedValue + Input.MouseWorldDelta);
 										}));
 								}
 								else

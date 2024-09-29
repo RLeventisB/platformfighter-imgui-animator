@@ -223,7 +223,7 @@ namespace Editor.Model
 
 				if (Looping && HasKeyframes())
 				{
-					if (CurrentKeyframe > lastFrame)
+					if (CurrentKeyframe >= lastFrame)
 						CurrentKeyframe = firstFrame;
 					else if (CurrentKeyframe < firstFrame)
 						CurrentKeyframe = lastFrame;

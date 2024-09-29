@@ -17,15 +17,15 @@ namespace Editor
 		{
 			SelectedLine = selectedLine;
 			HitboxAnimationObjectReference = hitboxAnimationObject;
-			OldPosition = hitboxAnimationObject.Position;
-			OldSize = hitboxAnimationObject.Size;
+			OldPosition = hitboxAnimationObject.Position.CachedValue;
+			OldSize = hitboxAnimationObject.Size.CachedValue;
 			EditorApplication.selectedData = new SelectionData(HitboxAnimationObjectReference); // just in case you click out of the box
 		}
 
 		public override void OnMoveDrag(Vector2 worldDifference, Vector2 screenDifference)
 		{
-			Vector2 topLeft = HitboxAnimationObjectReference.Position - HitboxAnimationObjectReference.Size / 2;
-			Vector2 bottomRight = HitboxAnimationObjectReference.Position + HitboxAnimationObjectReference.Size / 2;
+			Vector2 topLeft = HitboxAnimationObjectReference.Position.CachedValue - HitboxAnimationObjectReference.Size.CachedValue / 2;
+			Vector2 bottomRight = HitboxAnimationObjectReference.Position.CachedValue + HitboxAnimationObjectReference.Size.CachedValue / 2;
 
 			switch (SelectedLine)
 			{
@@ -47,14 +47,14 @@ namespace Editor
 					break;
 			}
 
-			HitboxAnimationObjectReference.Size = bottomRight - topLeft;
-			HitboxAnimationObjectReference.Position = topLeft + HitboxAnimationObjectReference.Size / 2;
+			HitboxAnimationObjectReference.Size.SetKeyframeValue(null,  bottomRight - topLeft);
+			HitboxAnimationObjectReference.Position.SetKeyframeValue(null,  topLeft + HitboxAnimationObjectReference.Size.CachedValue / 2);
 		}
 
 		public override void OnCancel()
 		{
-			HitboxAnimationObjectReference.Position = OldPosition;
-			HitboxAnimationObjectReference.Size = OldSize;
+			HitboxAnimationObjectReference.Position.SetKeyframeValue(null,  OldPosition);
+			HitboxAnimationObjectReference.Size.SetKeyframeValue(null, OldSize);
 		}
 	}
 	public class MoveKeyframeDelegateAction : DragAction
@@ -86,7 +86,10 @@ namespace Editor
 
 			foreach ((KeyframeableValue value, int index) in _dataPairs)
 			{
-				value[index].Frame = hoveringFrame;
+				Keyframe keyframe = value.GetKeyframeReferenceAt(index);
+				value.RemoveAt(index);
+				keyframe.Frame = hoveringFrame;
+				value.Add(keyframe);
 				value.SortFrames();
 			}
 		}

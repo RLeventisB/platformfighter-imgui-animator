@@ -126,11 +126,12 @@ namespace Editor
 
 		public static void ResetEditor()
 		{
-			if(State?.Textures != null)
-			foreach (TextureFrame texture in State.Textures.Values)
-			{
-				texture.Remove();
-			}
+			if (State?.Textures != null)
+				foreach (TextureFrame texture in State.Textures.Values)
+				{
+					texture.Remove();
+				}
+
 			State = new State();
 
 			InitializeDefaultState(State);
@@ -246,6 +247,17 @@ namespace Editor
 			if (selectedData.ObjectSelectionType == SelectionType.Graphic)
 			{
 				DrawSpriteBounds(selectedData.Name, Color.Red);
+
+				/*if(selectedData.Reference is TextureAnimationObject textureObject)
+				for (int x = -500; x <= 500; x+=10)
+				{
+					for (int y = -500; y <= 500; y+=10)
+					{
+						Vector2 pos = textureObject.Position.CachedValue + new Vector2(x, y);
+						bool hover = textureObject.IsBeingHovered(pos, State.Animator.CurrentKeyframe);
+						primitiveBatch.DrawBox(new Vector3(pos, 0), new Vector3(1, 1, 1), hover ? Color.Green : Color.Red, PrimitiveBatch.DrawStyle.Wireframe);
+					}
+				}*/
 			}
 
 			if (Timeline.selectedLink != null)
@@ -284,17 +296,20 @@ namespace Editor
 
 			foreach (HitboxAnimationObject entity in State.HitboxEntities.Values.Where(v => v.IsOnFrame(State.Animator.CurrentKeyframe)))
 			{
-				Vector3 center = new Vector3(entity.Position, 0);
-				Vector3 size = new Vector3(entity.Size, 0);
-				primitiveBatch.DrawBox(center, size, entity.GetColor().MultiplyAlpha(0.2f));
+				Vector2 position = entity.Position.CachedValue;
+				Vector2 size = entity.Size.CachedValue;
+
+				Vector3 center = new Vector3(position, 0);
+				Vector3 size3d = new Vector3(size, 0);
+				primitiveBatch.DrawBox(center, size3d, entity.GetColor().MultiplyAlpha(0.2f));
 
 				HitboxLine selectedLine = selectedData.IsOf(entity) ? entity.GetSelectedLine(Input.MouseWorld) : HitboxLine.None;
 				Vector3[] points =
 				[
-					new Vector3(entity.Position.X - entity.Size.X / 2, entity.Position.Y - entity.Size.Y / 2, 0),
-					new Vector3(entity.Position.X + entity.Size.X / 2, entity.Position.Y - entity.Size.Y / 2, 0),
-					new Vector3(entity.Position.X + entity.Size.X / 2, entity.Position.Y + entity.Size.Y / 2, 0),
-					new Vector3(entity.Position.X - entity.Size.X / 2, entity.Position.Y + entity.Size.Y / 2, 0)
+					new Vector3(position.X - size.X / 2, position.Y - size.Y / 2, 0),
+					new Vector3(position.X + size.X / 2, position.Y - size.Y / 2, 0),
+					new Vector3(position.X + size.X / 2, position.Y + size.Y / 2, 0),
+					new Vector3(position.X - size.X / 2, position.Y + size.Y / 2, 0)
 				];
 
 				for (int i = 0; i < 4; i++)
@@ -312,7 +327,7 @@ namespace Editor
 				Camera.View;
 
 			spriteBatch.Begin(SpriteSortMode.FrontToBack, BlendState.NonPremultiplied, SamplerState.PointClamp, null, null, null, spriteBatchTransformation);
-			
+
 			foreach (TextureAnimationObject entity in State.GraphicEntities.Values)
 			{
 				Color color = new Color(1f, 1f, 1f, entity.Transparency.CachedValue);
@@ -386,7 +401,7 @@ namespace Editor
 			return (new Vector3(tlX, tlY, 0), new Vector3(trX, trY, 0), new Vector3(blX, blY, 0), new Vector3(brX, brY, 0));
 		}
 
-		private static void GetQuadsPrimitive(float x, float y, float pivotX, float pivotY, float w, float h, float sin, float cos, out float tlX, out float tlY, out float trX, out float trY, out float blX, out float blY, out float brX, out float brY)
+		public static void GetQuadsPrimitive(float x, float y, float pivotX, float pivotY, float w, float h, float sin, float cos, out float tlX, out float tlY, out float trX, out float trY, out float blX, out float blY, out float brX, out float brY)
 		{
 			tlX = x + pivotX * cos - pivotY * sin;
 			tlY = y + pivotX * sin + pivotY * cos;
@@ -451,7 +466,7 @@ namespace Editor
 					{
 						Keyframe keyframe = Timeline.selectedLink.link.Keyframes[index];
 						float rotation = ((float[])Timeline.selectedLink.extraData)[index];
-						
+
 						// TODO: implement
 					}
 
@@ -481,23 +496,24 @@ namespace Editor
 			drawList.AddImageQuad(ImguiRenderer.fontTextureId.Value, tl, tr, br, bl, uv0, uv1, uv2, uv3, Color.White.PackedValue);
 		}
 
-		public static void RenameEntity(TextureAnimationObject textureAnimationObject, string newName)
+		public static void RenameEntity(IAnimationObject animationObject, string newName)
 		{
-// re-add entity
-			string oldName = textureAnimationObject.Name;
-			State.GraphicEntities.Remove(oldName);
-			State.GraphicEntities[newName] = textureAnimationObject;
-			textureAnimationObject.Name = newName;
+			string oldName = animationObject.Name;
 
-			if (State.Animator.RegisteredGraphics.ChangeEntityName(oldName, newName))
+			// re-add entity
+			switch (animationObject)
 			{
-				foreach (KeyframeableValue value in textureAnimationObject.EnumerateKeyframeableValues())
-				{
-					//value.Owner = textureEntity;
-				}
+				case HitboxAnimationObject:
+					State.Animator.RegisteredHitboxes.ChangeEntityName(oldName, newName);
+
+					break;
+				case TextureAnimationObject:
+					State.Animator.RegisteredGraphics.ChangeEntityName(oldName, newName);
+
+					break;
 			}
 
-			selectedData = new SelectionData(textureAnimationObject);
+			selectedData = new SelectionData(animationObject);
 		}
 
 		public static void RenameTexture(TextureFrame textureFrame, string newName)
@@ -541,6 +557,7 @@ namespace Editor
 		public static void ApplyJsonData(JsonData data)
 		{
 			ResetEditor();
+
 			foreach (TextureFrame texture in data.textures)
 			{
 				texture.LoadTexture();
@@ -548,14 +565,17 @@ namespace Editor
 			}
 
 			List<Keyframe> keyframesToResolve = new List<Keyframe>(); // since json loads objects as JsonElements :(
+
 			foreach (TextureAnimationObject graphicObject in data.graphicObjects)
 			{
 				State.GraphicEntities.Add(graphicObject.Name, graphicObject);
-				foreach(var keyframeableValue in graphicObject.EnumerateKeyframeableValues())
+
+				foreach (KeyframeableValue keyframeableValue in graphicObject.EnumerateKeyframeableValues())
 				{
 					foreach (KeyframeLink link in keyframeableValue.links)
 					{
 						link.ContainingValue = keyframeableValue;
+
 						foreach (Keyframe keyframe in link.Keyframes) // sometimes keyframes dont store their containing link so fixup!!
 						{
 							keyframe.ContainingLink = link;
@@ -565,10 +585,12 @@ namespace Editor
 					keyframesToResolve.AddRange(keyframeableValue.keyframes);
 				}
 			}
+
 			foreach (HitboxAnimationObject hitboxObject in data.hitboxObjects)
 			{
 				State.HitboxEntities.Add(hitboxObject.Name, hitboxObject);
-				foreach(var keyframeableValue in hitboxObject.EnumerateKeyframeableValues())
+
+				foreach (KeyframeableValue keyframeableValue in hitboxObject.EnumerateKeyframeableValues())
 				{
 					foreach (KeyframeLink link in keyframeableValue.links)
 					{
@@ -579,6 +601,7 @@ namespace Editor
 							keyframe.ContainingLink = link;
 						}
 					}
+
 					keyframesToResolve.AddRange(keyframeableValue.keyframes);
 				}
 			}
@@ -594,12 +617,15 @@ namespace Editor
 					{
 						case Vector2KeyframeValue:
 							keyframe.Value = new Vector2(element.GetProperty("x").GetSingle(), element.GetProperty("y").GetSingle());
+
 							break;
 						case IntKeyframeValue:
 							keyframe.Value = element.GetInt32();
+
 							break;
 						case FloatKeyframeValue:
 							keyframe.Value = element.GetSingle();
+
 							break;
 					}
 				}
@@ -608,6 +634,7 @@ namespace Editor
 					Console.WriteLine(e);
 				}
 			}
+
 			State.Animator.FPS = data.selectedFps;
 			State.Animator.CurrentKeyframe = 0;
 			State.Animator.CurrentKeyframe = data.currentKeyframe;

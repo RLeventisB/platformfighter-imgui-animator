@@ -73,7 +73,7 @@ namespace Editor.Gui
 
 				v.CurrentKeyframe++;
 
-				if (v.Looping && v.HasKeyframes() && v.CurrentKeyframe > lastFrame)
+				if (v.Looping && v.HasKeyframes() && v.CurrentKeyframe >= lastFrame)
 					v.CurrentKeyframe = firstFrame;
 			}),
 			("Next keyframe", IcoMoon.NextIcon, null, ImGuiKey.ModShift | ImGuiKey.RightArrow, v =>
@@ -97,6 +97,8 @@ namespace Editor.Gui
 		private static (string trackId, int linkId, float accumulation) linkInterpolationData = (string.Empty, -1, 0);
 		public static SelectedLinkData selectedLink;
 		public static CreationLinkData newLinkCreationData;
+		private static Keyframe keyframeToClone;
+		private static bool cloneKeyframePopupOpen;
 
 		public static void DrawUiTimeline(Animator animator)
 		{
@@ -129,7 +131,7 @@ namespace Editor.Gui
 				ImGui.SetNextItemWidth(48f);
 
 				float zoomTarget = TimelineZoom.Target;
-				if(ImGui.DragFloat("##ZoomValue", ref zoomTarget, 0.1f, 0.1f, 5f, null, ImGuiSliderFlags.AlwaysClamp))
+				if (ImGui.DragFloat("##ZoomValue", ref zoomTarget, 0.1f, 0.1f, 5f, null, ImGuiSliderFlags.AlwaysClamp))
 					TimelineZoom.Target = zoomTarget;
 
 				ImGui.BeginChild("KeyframeViewer");
@@ -259,15 +261,6 @@ namespace Editor.Gui
 							if (clickedLeft)
 							{
 								EditorApplication.SelectLink(link);
-
-								/*ImDrawListPtr drawListPtr = ImGui.GetWindowDrawList();
-								ImDrawVert* ptr = drawListPtr._VtxWritePtr.NativePtr;
-								ptr -= 4;
-								ptr[0].col = Color.SlateGray.PackedValue;
-								ptr[1].col = Color.SlateGray.PackedValue;
-								ptr[2].col = Color.SlateGray.PackedValue;
-								ptr[3].col = Color.SlateGray.PackedValue; me when i want to change the color in the same frame (nobody will notice)
-								*/
 							}
 
 							linkTooltip = $"Link {{{string.Join(", ", link.Keyframes.Select(v => v.ToString()))}}}\n({link.InterpolationType})";
@@ -297,13 +290,20 @@ namespace Editor.Gui
 								if (keyframe.ContainingLink is not null)
 									EditorApplication.SelectLink(keyframe.ContainingLink);
 
-								EditorApplication.SetDragAction(new MoveKeyframeDelegateAction([(value, i)]));
+								EditorApplication.SetDragAction(new MoveKeyframeDelegateAction([(value, index)]));
 							}
 
-							if ((clickedLeft || ImGui.IsMouseClicked(ImGuiMouseButton.Right)) && ImGui.GetIO().KeyCtrl)
+							if (clickedLeft && ImGui.GetIO().KeyCtrl)
 							{
 								if (newLinkCreationData == null)
 									newLinkCreationData = new CreationLinkData(value, i, 0);
+							}
+
+							if (ImGui.IsMouseReleased(ImGuiMouseButton.Right))
+							{
+								ResetSavedInput(keyframe.Frame.ToString());
+								cloneKeyframePopupOpen = true;
+								keyframeToClone = keyframe;
 							}
 
 							if (ImGui.IsKeyDown(ImGuiKey.Delete))
@@ -353,6 +353,51 @@ namespace Editor.Gui
 				}
 
 				ImGui.TreePop();
+			}
+
+			if (cloneKeyframePopupOpen)
+			{
+				ImGui.OpenPopup("Clonar keyframe a", ImGuiPopupFlags.MouseButtonRight | ImGuiPopupFlags.AnyPopup | ImGuiPopupFlags.NoReopen);
+			}
+
+			if (ImGui.BeginPopupModal("Clonar keyframe a", ref cloneKeyframePopupOpen, ImGuiWindowFlags.Modal | ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoResize))
+			{
+				if (keyframeToClone is not null)
+				{
+					string input = SavedInput("Frame de destino:", string.Empty, out bool changed);
+
+					if (changed)
+						ResetSavedInput(string.Concat(input.Where(char.IsNumber)));
+
+					ImGui.SetNextItemShortcut(ImGuiKey.Enter);
+
+					bool validFrame = int.TryParse(input, out int finalFrame);
+
+					ImGui.BeginDisabled(!validFrame);
+
+					if (ImGui.Button("Clonar") && validFrame)
+					{
+						cloneKeyframePopupOpen = false;
+						keyframeToClone.ContainingValue?.SetKeyframeValue(finalFrame, keyframeToClone.Value);
+						keyframeToClone = null;
+
+						ImGui.CloseCurrentPopup();
+					}
+
+					ImGui.EndDisabled();
+
+					ImGui.SetNextItemShortcut(ImGuiKey.Escape);
+					ImGui.SameLine();
+
+					if (ImGui.Button("Cancelar"))
+					{
+						keyframeToClone = null;
+						cloneKeyframePopupOpen = false;
+						ImGui.CloseCurrentPopup();
+					}
+				}
+
+				ImGui.EndPopup();
 			}
 
 			void DrawMainKeyframe(int frame)
@@ -420,8 +465,8 @@ namespace Editor.Gui
 			if (isActive) // yes i know checkboxes are made for this but i want to make things harder for myself :>( 
 				ImGui.PushStyleColor(ImGuiCol.Button, ImGui.GetColorU32(ImGuiCol.ButtonActive));
 
-			if (!ImGui.GetIO().WantCaptureKeyboard)
-				ImGui.SetNextItemShortcut(shortcut, ImGuiInputFlags.RouteGlobal | ImGuiInputFlags.Repeat);
+			if (!ImGui.GetIO().WantCaptureKeyboard && ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows))
+				ImGui.SetNextItemShortcut(shortcut, ImGuiInputFlags.Repeat);
 
 			if (ImGui.Button(icon.ToString(), new NVector2(24, 22)))
 				onPress?.Invoke(animator);
