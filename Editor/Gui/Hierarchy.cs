@@ -728,7 +728,7 @@ namespace Editor.Gui
 					{
 						handle = GCHandle.Alloc(hitboxObject.SpawnFrame, GCHandleType.Pinned);
 
-						if (ImGui.DragScalar("Frame start", ImGuiDataType.U16, handle.AddrOfPinnedObject())) ;
+						if (ImGui.DragScalar("Frame start", ImGuiDataType.U16, handle.AddrOfPinnedObject()))
 						{
 							hitboxObject.SpawnFrame = *(ushort*)handle.AddrOfPinnedObject();
 						}

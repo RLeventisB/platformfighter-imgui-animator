@@ -57,6 +57,47 @@ namespace Editor
 			HitboxAnimationObjectReference.Size.SetKeyframeValue(null, OldSize);
 		}
 	}
+	public class MoveAnimationObjectPositionAction : DragAction
+	{
+		public Vector2KeyframeValue PositionValue { get; init; }
+		public Vector2 oldCachedValue, accumulatedDifference;
+		public bool affectAllKeyframes;
+
+		public MoveAnimationObjectPositionAction(Vector2KeyframeValue positionValue) : base("MoveAnimObjectPosition", 3f, true)
+		{
+			PositionValue = positionValue;
+			oldCachedValue = positionValue.CachedValue;
+			affectAllKeyframes = ImGui.IsKeyDown(ImGuiKey.ModShift);
+			EditorApplication.State.Animator.Stop();
+		}
+		
+		public override void OnMoveDrag(Vector2 worldDifference, Vector2 screenDifference)
+		{
+			accumulatedDifference += worldDifference;
+			PositionValue.SetKeyframeValue(null, oldCachedValue + accumulatedDifference, true);
+		}
+
+		public override void OnRelease()
+		{
+			if (affectAllKeyframes)
+			{
+				foreach (Keyframe keyframe in PositionValue.keyframes)
+				{
+					keyframe.Value = (Vector2)keyframe.Value + accumulatedDifference;
+				}
+				PositionValue.InvalidateCachedValue();
+			}
+			else
+			{
+				PositionValue.SetKeyframeValue(null, oldCachedValue + accumulatedDifference);
+			}
+		}
+
+		public override void OnCancel()
+		{
+			PositionValue.SetKeyframeValue(null, oldCachedValue, true);
+		}
+	}
 	public class MoveKeyframeDelegateAction : DragAction
 	{
 		private readonly (KeyframeableValue value, int index)[] _dataPairs;

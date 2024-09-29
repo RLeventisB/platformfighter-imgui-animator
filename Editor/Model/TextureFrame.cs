@@ -106,7 +106,7 @@ namespace Editor.Model
 							EditorApplication.ImguiRenderer.loadedTextures[ImguiId] = texture;
 							attempts = 10;
 						}
-						catch (Exception e)
+						catch
 						{
 							attempts++;
 							Thread.Sleep(100);

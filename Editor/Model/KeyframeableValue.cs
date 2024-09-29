@@ -423,7 +423,7 @@ namespace Editor.Model
 
 			if (link.UseRelativeProgressCalculation)
 			{
-				float interpolatedFrame = usedFrame * linkFrameDuration;
+				float interpolatedFrame = link.FirstKeyframe.Frame + usedFrame * linkFrameDuration;
 				keyFrameIndex = keyframeValue.FindIndexByKeyframe((int)interpolatedFrame);
 
 				if (keyFrameIndex < 0)
@@ -433,8 +433,8 @@ namespace Editor.Model
 
 				keyFrameIndex = Math.Clamp(keyFrameIndex, 0, link.Count - 2);
 
-				float localProgress = (interpolatedFrame - link.GetKeyframeClamped(keyFrameIndex).Frame) / (link.GetKeyframeClamped(keyFrameIndex + 1).Frame - link.GetKeyframeClamped(keyFrameIndex).Frame);
-				usedFrame = (keyFrameIndex + localProgress) / (link.Count - 1);
+				float localProgress = (interpolatedFrame) / (link.GetKeyframeClamped(keyFrameIndex + 1).Frame - link.GetKeyframeClamped(keyFrameIndex).Frame);
+				usedFrame = (localProgress) / (link.Count - 1);
 			}
 
 			object[] objects = link.Keyframes.Select(v => v.Value).ToArray();
@@ -469,12 +469,12 @@ namespace Editor.Model
 			return null;
 		}
 
-		public Keyframe SetKeyframeValue(int? frame, object data)
+		public Keyframe SetKeyframeValue(int? frame, object data, bool setCachedValue = false)
 		{
 			frame ??= EditorApplication.State.Animator.CurrentKeyframe;
 			Keyframe keyframe = new Keyframe(this, frame.Value, data);
 
-			if (SettingsManager.SetKeyframeOnModify)
+			if (SettingsManager.SetKeyframeOnModify && !setCachedValue)
 			{
 				Add(keyframe);
 
@@ -496,6 +496,8 @@ namespace Editor.Model
 				return false;
 
 			keyframes.RemoveAt(index);
+			
+			InvalidateCachedValue();
 
 			return true;
 		}
@@ -514,19 +516,19 @@ namespace Editor.Model
 		{
 			foreach (Keyframe keyframe in other.keyframes)
 			{
-				Add(new Keyframe(this, keyframe.Frame, keyframe.Value));
+				Add(new Keyframe(this, keyframe.Frame, keyframe.Value.CloneWithoutReferences()));
 			}
 
 			foreach (KeyframeLink link in other.links)
 			{
-				List<int> linkKeyframes = new List<int>();
+				List<int> linkKeyframesIndices = new List<int>();
 
 				foreach (Keyframe keyframe in link)
 				{
-					linkKeyframes.Add(keyframe.Frame);
+					linkKeyframesIndices.Add(other.keyframes.IndexOf(keyframe));
 				}
 
-				AddLink(new KeyframeLink(this, linkKeyframes.Select(GetKeyframe)));
+				AddLink(new KeyframeLink(this, linkKeyframesIndices.Select(v => keyframes[v])));
 			}
 
 			return this;

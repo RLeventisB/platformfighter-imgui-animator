@@ -43,14 +43,9 @@ namespace Editor.Gui
 					{
 						switch (EditorApplication.selectedData.Reference)
 						{
-							case TextureAnimationObject:
-								EditorApplication.SetDragAction(new DelegateDragAction("MoveGraphicEntityObject",
-									delegate
-									{
-										TextureAnimationObject selectedTextureAnimationObject = EditorApplication.State.GraphicEntities[name];
-										selectedTextureAnimationObject.Position.SetKeyframeValue(null, selectedTextureAnimationObject.Position.CachedValue + Input.MouseWorldDelta);
-									}));
-
+							case TextureAnimationObject textureObject:
+								EditorApplication.SetDragAction(new MoveAnimationObjectPositionAction(textureObject.Position));
+								
 								break;
 							case HitboxAnimationObject hitboxEntity:
 							{
@@ -58,12 +53,7 @@ namespace Editor.Gui
 
 								if (selectedLine == HitboxLine.None)
 								{
-									EditorApplication.SetDragAction(new DelegateDragAction("MoveHitboxEntityObject",
-										delegate
-										{
-											HitboxAnimationObject selectedTextureAnimationObject = EditorApplication.State.HitboxEntities[name];
-											selectedTextureAnimationObject.Position.SetKeyframeValue(null, selectedTextureAnimationObject.Position.CachedValue + Input.MouseWorldDelta);
-										}));
+									EditorApplication.SetDragAction(new MoveAnimationObjectPositionAction(hitboxEntity.Position));
 								}
 								else
 								{

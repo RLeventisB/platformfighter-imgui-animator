@@ -161,17 +161,7 @@ namespace Editor.Gui
 							ImGui.Columns(2, "##legend", false);
 							ImGui.SetColumnWidth(0, currentLegendWidth);
 
-							switch (HitboxMode)
-							{
-								case true when EditorApplication.selectedData.ObjectSelectionType == SelectionType.Hitbox:
-									RenderSelectedHitboxData((HitboxAnimationObject)selectedEntity, animator, endingFrame, headerHeightOrsmting, oldTimelineZoomTarget);
-
-									break;
-								case false when EditorApplication.selectedData.ObjectSelectionType == SelectionType.Graphic:
-									RenderSelectedEntityKeyframes((TextureAnimationObject)selectedEntity, animator, endingFrame, headerHeightOrsmting, oldTimelineZoomTarget);
-
-									break;
-							}
+							 RenderSelectedEntityKeyframes(selectedEntity, animator, endingFrame, headerHeightOrsmting, oldTimelineZoomTarget);
 						}
 
 						ImGui.EndChild();
@@ -189,7 +179,7 @@ namespace Editor.Gui
 			ImGui.Text("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
 		}
 
-		private static void RenderSelectedEntityKeyframes(TextureAnimationObject selectedAnimationObject, Animator animator, float endingFrame, float headerHeightOrsmting, float oldTimelineZoomTarget)
+		private static void RenderSelectedEntityKeyframes(IAnimationObject selectedAnimationObject, Animator animator, float endingFrame, float headerHeightOrsmting, float oldTimelineZoomTarget)
 		{
 			bool open = ImGui.TreeNodeEx(selectedAnimationObject.Name, ImGuiTreeNodeFlags.DefaultOpen);
 
@@ -198,7 +188,7 @@ namespace Editor.Gui
 			// draw entity keyframes
 			for (int frame = visibleStartingFrame; frame < endingFrame; frame++)
 			{
-				if (animator.EntityHasKeyframeAtFrame(selectedAnimationObject.Name, frame))
+				if (animator.EntityHasKeyframeAtFrame(selectedAnimationObject, frame))
 				{
 					DrawMainKeyframe(frame);
 				}
@@ -296,7 +286,7 @@ namespace Editor.Gui
 							if (clickedLeft && ImGui.GetIO().KeyCtrl)
 							{
 								if (newLinkCreationData == null)
-									newLinkCreationData = new CreationLinkData(value, i, 0);
+									newLinkCreationData = new CreationLinkData(value, vStartIndex + i, 0);
 							}
 
 							if (ImGui.IsMouseReleased(ImGuiMouseButton.Right))
@@ -309,6 +299,12 @@ namespace Editor.Gui
 							if (ImGui.IsKeyDown(ImGuiKey.Delete))
 							{
 								value.RemoveAt(index);
+							}
+
+							if (ImGui.IsKeyChordPressed(ImGuiKey.ModCtrl | ImGuiKey.C))
+							{
+								// todo: allow copying keyframe values
+								ImGui.SetClipboardText("");
 							}
 
 							if (value.Name == RotationProperty)

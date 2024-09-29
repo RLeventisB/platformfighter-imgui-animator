@@ -306,12 +306,9 @@ namespace Editor.Model
 			return false;
 		}
 
-		public bool EntityHasKeyframeAtFrame(string entityName, int frame)
+		public bool EntityHasKeyframeAtFrame(IAnimationObject animationObject, int frame)
 		{
-			if (!RegisteredGraphics.TryGetValue(entityName, out TextureAnimationObject entity))
-				return false;
-
-			foreach (KeyframeableValue value in entity.EnumerateKeyframeableValues())
+			foreach (KeyframeableValue value in animationObject.EnumerateKeyframeableValues())
 			{
 				if (value.HasKeyframeAtFrame(frame))
 					return true;

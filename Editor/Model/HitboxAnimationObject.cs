@@ -56,7 +56,7 @@ namespace Editor.Model
 			Size = new Vector2KeyframeValue(this, Vector2.One * 16, SizeProperty, false);
 
 			Position.CloneKeyframeDataFrom(clone.Position);
-			Size.CloneKeyframeDataFrom(clone.Position);
+			Size.CloneKeyframeDataFrom(clone.Size);
 			Name = clone.Name;
 			Damage = clone.Damage;
 			SpawnFrame = clone.SpawnFrame;
@@ -76,6 +76,7 @@ namespace Editor.Model
 			ShieldLaunchAngle = clone.ShieldLaunchAngle;
 			ShieldPotency = clone.ShieldPotency;
 			Priority = clone.Priority;
+			Type = clone.Type;
 		}
 
 		public int EndFrame => SpawnFrame + FrameDuration;

@@ -1,6 +1,8 @@
 ﻿using Editor.Gui;
 using Editor.Model;
 
+using ImGuiNET;
+
 using System.Runtime.CompilerServices;
 
 namespace Editor

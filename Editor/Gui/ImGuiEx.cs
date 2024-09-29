@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
@@ -86,6 +87,22 @@ namespace Editor.Gui
 			return (x2 - x1) * (py - y1) - (y2 - y1) * (px - x1);
 		}
 		
+		public static unsafe object CloneWithoutReferences(this object obj)
+		{
+			Type underlyingType = obj.GetType();
+			object clone = Activator.CreateInstance(underlyingType);
+
+			// fixed (void* ptrClone = &clone)
+			{
+				// fixed (void* destinationClone = &obj)
+				{
+					Unsafe.CopyBlock(&clone, &obj, (uint)Marshal.SizeOf(underlyingType));
+				}
+			}
+			
+			return clone;
+		}
+		
 		public static Vector2 Rotate(Vector2 v, float degrees)
 		{
 			switch (degrees % 360)
@@ -145,7 +162,7 @@ namespace Editor.Gui
 			valuesList.AddRange(values);
 			valuesList.Add(2 * values[^1] - values[^2]);
 
-			int index = Math.Clamp((int)progress, 0, values.Length - 1) + 1;
+			int index = Math.Clamp((int)progress + 1, 1, valuesList.Count - 3);
 			float localProgress = progress - index + 1;
 
 			return (int)MathHelper.CatmullRom(valuesList[index - 1], valuesList[index], valuesList[index + 1], valuesList[index + 2], localProgress);

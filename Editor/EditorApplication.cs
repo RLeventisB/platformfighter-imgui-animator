@@ -151,6 +151,13 @@ namespace Editor
 						propertyId.CacheValue(state.Animator.CurrentKeyframe);
 					}
 				}
+				foreach (HitboxAnimationObject entity in State.HitboxEntities.Values)
+				{
+					foreach (KeyframeableValue propertyId in entity.EnumerateKeyframeableValues())
+					{
+						propertyId.CacheValue(state.Animator.CurrentKeyframe);
+					}
+				}
 			};
 		}
 
@@ -371,7 +378,7 @@ namespace Editor
 
 				spriteBatch.Draw(texture, position, sourceRect, color,
 					rotation, texture.Pivot,
-					scale, effects, selectedData.IsOf(entity) ? 1 : entity.ZIndex.CachedValue);
+					scale, effects, entity.ZIndex.CachedValue);
 			}
 
 			spriteBatch.End();

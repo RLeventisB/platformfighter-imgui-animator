@@ -13,16 +13,7 @@ namespace Editor.Gui
 {
 	public static class SettingsManager
 	{
-		public static readonly JsonReaderOptions DefaultReaderOptions = new JsonReaderOptions
-		{
-			CommentHandling = JsonCommentHandling.Skip,
-			AllowTrailingCommas = true
-		};
-		public static readonly JsonWriterOptions DefaultWriterOptions = new JsonWriterOptions
-		{
-			Indented = true
-		};
-		public static readonly JsonSerializerOptions DefaultSerializerOptions = new JsonSerializerOptions
+		public static JsonSerializerOptions DefaultSerializerOptions => new JsonSerializerOptions // returns an new instance everytime because caching is brROKEN  I LOST 6 ENTIRE PROJECTS
 		{
 			PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
 			AllowTrailingCommas = true,
