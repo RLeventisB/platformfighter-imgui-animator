@@ -38,10 +38,12 @@ namespace Editor.Model
 			return success;
 		}
 
-		public override void CacheValue(int frame)
+		public override void CacheValue(int? frame)
 		{
-			Interpolate(this, frame, Vector2Interpolator, out object value);
-			cachedValue = (value, frame);
+			frame ??= EditorApplication.State.Animator.CurrentKeyframe;
+			
+			Interpolate(this, frame.Value, Vector2Interpolator, out object value);
+			cachedValue = (value, frame.Value);
 		}
 	}
 	public class FloatKeyframeValue : KeyframeableValue
@@ -72,10 +74,12 @@ namespace Editor.Model
 			return success;
 		}
 
-		public override void CacheValue(int frame)
+		public override void CacheValue(int? frame)
 		{
-			Interpolate(this, frame, FloatInterpolator, out object value);
-			cachedValue = (value, frame);
+			frame ??= EditorApplication.State.Animator.CurrentKeyframe;
+
+			Interpolate(this, frame.Value, FloatInterpolator, out object value);
+			cachedValue = (value, frame.Value);
 		}
 	}
 	public class IntKeyframeValue : KeyframeableValue
@@ -106,10 +110,12 @@ namespace Editor.Model
 			return success;
 		}
 
-		public override void CacheValue(int frame)
+		public override void CacheValue(int? frame)
 		{
-			Interpolate(this, frame, IntegerInterpolator, out object value);
-			cachedValue = (value, frame);
+			frame ??= EditorApplication.State.Animator.CurrentKeyframe;
+
+			Interpolate(this, frame.Value, IntegerInterpolator, out object value);
+			cachedValue = (value, frame.Value);
 		}
 	}
 	[DebuggerDisplay("{Name}")]
@@ -306,20 +312,6 @@ namespace Editor.Model
 			int linkFrameDuration = link.LastKeyframe.Frame - link.FirstKeyframe.Frame;
 			float progressedFrame = (frame - link.FirstKeyframe.Frame) / (float)linkFrameDuration;
 			float usedFrame = progressedFrame;
-			/*float progress;
-
-			if (link.UseRelativeProgressCalculation)
-			{
-				float localProgress = (frame - keyframe.Frame) / (float)(link.Keyframes[keyFrameIndex + 1].Frame - keyframe.Frame);
-				float frameProgress = (float)(keyframe.Frame - link.FirstKeyframe.Frame) / (link.LastKeyframe.Frame - link.FirstKeyframe.Frame);
-				progress = (keyFrameIndex + localProgress) / (link.Length - 1);
-			}
-			else
-			{
-				progress = (frame - link.FirstKeyframe.Frame) / (float)(link.LastKeyframe.Frame - link.FirstKeyframe.Frame);
-			}
-
-			float lerpValue = progress;*/
 
 			switch (link.InterpolationType)
 			{
@@ -433,8 +425,8 @@ namespace Editor.Model
 
 				keyFrameIndex = Math.Clamp(keyFrameIndex, 0, link.Count - 2);
 
-				float localProgress = (interpolatedFrame) / (link.GetKeyframeClamped(keyFrameIndex + 1).Frame - link.GetKeyframeClamped(keyFrameIndex).Frame);
-				usedFrame = (localProgress) / (link.Count - 1);
+				float localProgress = InverseLerp(interpolatedFrame, link.GetKeyframeClamped(keyFrameIndex).Frame, link.GetKeyframeClamped(keyFrameIndex + 1).Frame);
+				usedFrame = (keyFrameIndex + localProgress) / (link.Count - 1);
 			}
 
 			object[] objects = link.Keyframes.Select(v => v.Value).ToArray();
@@ -446,12 +438,12 @@ namespace Editor.Model
 			return true;
 		}
 
-		public abstract void CacheValue(int frame);
+		public abstract void CacheValue(int? frame);
 
 		public void InvalidateCachedValue()
 		{
 			cachedValue = (DefaultValue, -1);
-			CacheValue(EditorApplication.State.Animator.CurrentKeyframe);
+			CacheValue(null);
 		}
 
 		public static IInterpolator ResolveInterpolator(Type type)

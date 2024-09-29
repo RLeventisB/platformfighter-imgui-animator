@@ -585,7 +585,7 @@ namespace Editor.Gui
 				}
 
 				// draw currentFrame line if within range
-				if (animator.CurrentKeyframe >= visibleStartingFrame && animator.CurrentKeyframe <= visibleEndingFrame / TimelineZoom)
+				if (animator.CurrentKeyframe >= visibleStartingFrame && animator.CurrentKeyframe <= visibleStartingFrame + frames)
 				{
 					NVector2 frameLineStart = timelineRegionMin;
 					frameLineStart.X += GetTimelinePosForFrame(animator.CurrentKeyframe);

@@ -19,6 +19,8 @@ namespace Editor.Gui
 		public static FilePickerDefinition OpenFdDefinition;
 		public static float PivotViewerZoom = 2f;
 		public static Vector2 PivotViewerOffset = Vector2.Zero;
+		private static NVector2 projectActionsPositionOffset;
+		private static float projectActionsKeyframeMult = 1;
 
 		public static void Draw()
 		{
@@ -37,7 +39,6 @@ namespace Editor.Gui
 
 		private static void DrawUiActions()
 		{
-			NVector2 toolbarSize = NVector2.UnitY * (ImGui.GetTextLineHeightWithSpacing() * 2 + ImGui.GetStyle().ItemSpacing.Y * 2);
 			ImGui.BeginChild("Management actions", NVector2.Zero, ImGuiChildFlags.FrameStyle | ImGuiChildFlags.AutoResizeY, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse | ImGuiWindowFlags.AlwaysAutoResize);
 			{
 				ImGui.Text($"{IcoMoon.HammerIcon} Actions");
@@ -152,6 +153,80 @@ namespace Editor.Gui
 				}
 
 				ImGui.SetItemTooltip("Cambiar a editor de hitboxes");
+				
+				ImGui.SameLine();
+
+				ImGui.SetNextItemShortcut(ImGuiKey.ModAlt | ImGuiKey.P, ImGuiInputFlags.RouteAlways);
+
+				if (ImGui.Button($"{IcoMoon.EqualizerIcon}"))
+				{
+					ImGui.OpenPopup("Project actions");
+				}
+
+				ImGui.SetItemTooltip("Acciones del proyecto\nShortcut: Alt + P");
+
+				popupOpen = true;
+				
+				if (ImGui.BeginPopupModal("Project actions", ref popupOpen, ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse | ImGuiWindowFlags.NoDocking))
+				{
+					ImGui.InputFloat2("Ajustar todas las posiciones por:", ref projectActionsPositionOffset);
+
+					ImGui.SetItemTooltip("Esto añade un valor constante a todas las posiciones de los objetos en el mundo.");
+					if (ImGui.Button("Cambiar posiciones"))
+					{
+						foreach (TextureAnimationObject textureobject in EditorApplication.State.Animator.RegisteredGraphics)
+						{
+							foreach (Keyframe keyframe in textureobject.Position.keyframes)
+							{
+								keyframe.Value = (Vector2)keyframe.Value + projectActionsPositionOffset;
+							}
+							textureobject.Position.CacheValue(null);
+						}
+						foreach (HitboxAnimationObject hitboxObject in EditorApplication.State.Animator.RegisteredHitboxes)
+						{
+							foreach (Keyframe keyframe in hitboxObject.Position.keyframes)
+							{
+								keyframe.Value = (Vector2)keyframe.Value + projectActionsPositionOffset;
+							}
+							hitboxObject.Position.CacheValue(null);
+						}
+						projectActionsPositionOffset = NVector2.Zero;
+					}
+					
+					ImGui.InputFloat("Multiplicar tiempo global por:", ref projectActionsKeyframeMult);
+
+					ImGui.SetItemTooltip("Esto multiplica todas las variables relacionadas con el tiempo en el mundo por un valor.\nEsto incluye posicion de los fotograma claves, y las duraciones de las hitboxes.\nTener en cuenta que esto redondea valores, haciendolo \"lossy\"");
+					if (ImGui.Button("Multiplicar tiempo"))
+					{
+						foreach (TextureAnimationObject textureobject in EditorApplication.State.Animator.RegisteredGraphics)
+						{
+							foreach (KeyframeableValue value in textureobject.EnumerateKeyframeableValues())
+							{
+								foreach (Keyframe keyframe in value.keyframes)
+								{
+									keyframe.Frame = (int)(keyframe.Frame * projectActionsKeyframeMult);
+								}
+								value.CacheValue(null);
+							}
+						}
+						foreach (HitboxAnimationObject hitboxObject in EditorApplication.State.Animator.RegisteredHitboxes)
+						{
+							foreach (KeyframeableValue value in hitboxObject.EnumerateKeyframeableValues())
+							{
+								foreach (Keyframe keyframe in value.keyframes)
+								{
+									keyframe.Frame = (int)(keyframe.Frame * projectActionsKeyframeMult);
+								}
+								value.CacheValue(null);
+							}
+
+							hitboxObject.FrameDuration = (ushort)(hitboxObject.FrameDuration * projectActionsKeyframeMult);
+							hitboxObject.SpawnFrame = (ushort)(hitboxObject.SpawnFrame * projectActionsKeyframeMult);
+						}
+						projectActionsKeyframeMult = 1;
+					}
+					ImGui.EndPopup();
+				}
 			}
 
 			ImGui.EndChild();
