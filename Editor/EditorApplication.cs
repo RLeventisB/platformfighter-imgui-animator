@@ -311,14 +311,16 @@ namespace Editor
 				Vector3 size3d = new Vector3(size, 0);
 				Color color = entity.GetColor();
 
-				if (selectedData.IsOf(entity))
+				bool isSelected = selectedData.IsOf(entity);
+
+				if (isSelected)
 				{
 					color = color.MultiplyRGB(1.4f);
 				}
 
 				primitiveBatch.DrawBox(center, size3d, color.MultiplyAlpha(0.2f));
 
-				HitboxLine selectedLine = selectedData.IsOf(entity) ? entity.GetSelectedLine(Input.MouseWorld) : HitboxLine.None;
+				HitboxLine selectedLine = isSelected ? entity.GetSelectedLine(Input.MouseWorld) : HitboxLine.None;
 				Vector3[] points =
 				[
 					new Vector3(position.X - size.X / 2, position.Y - size.Y / 2, 0),
@@ -330,6 +332,32 @@ namespace Editor
 				for (int i = 0; i < 4; i++)
 				{
 					primitiveBatch.DrawLine(points[i], points[(i + 1) % 4], (int)selectedLine == i ? Color.Pink : color);
+				}
+
+				if (entity.Type is HitboxType.Hitbox)
+				{
+					float linesAlpha = isSelected ? 1 : 0.5f;
+
+					// draw launch lines
+
+					(float launchSin, float launchCos) = MathF.SinCos(MathHelper.ToRadians(entity.LaunchAngle));
+					Vector3 lineEnd;
+
+					if (entity.LaunchPotencyGrowth != 0)
+					{
+						float launchPotency100 = entity.LaunchPotency + entity.LaunchPotencyGrowth * 100;
+						lineEnd = center + new Vector3(launchCos * launchPotency100, launchSin * launchPotency100, 0);
+						primitiveBatch.DrawLine(center, lineEnd, Color.Red.MultiplyAlpha(0.6f * linesAlpha));
+					}
+
+					lineEnd = center + new Vector3(launchCos * entity.LaunchPotency, launchSin * entity.LaunchPotency, 0);
+					primitiveBatch.DrawLine(center, lineEnd, Color.White.MultiplyAlpha(linesAlpha));
+
+					// draw shield launch line
+					(launchSin, launchCos) = MathF.SinCos(MathHelper.ToRadians(entity.ShieldLaunchAngle));
+
+					lineEnd = center + new Vector3(launchCos * entity.ShieldPotency, launchSin * entity.ShieldPotency, 0);
+					primitiveBatch.DrawLine(center, lineEnd, Color.LightSkyBlue.MultiplyAlpha(linesAlpha));
 				}
 			}
 

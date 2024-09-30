@@ -92,9 +92,8 @@ namespace Editor.Gui
 				ImGui.SameLine();
 
 				ImGui.BeginDisabled(SettingsManager.lastProjectSavePath is null || !EditorApplication.State.HasAnyEntity);
-				ImGui.SetNextItemShortcut(ImGuiKey.ModCtrl | ImGuiKey.S, ImGuiInputFlags.RouteAlways);
 
-				if (ImGui.Button($"{IcoMoon.FloppyDiskIcon}"))
+				if (ImGui.Button($"{IcoMoon.FloppyDiskIcon}") || ImGui.IsKeyChordPressed(ImGuiKey.ModCtrl | ImGuiKey.S)) // changed to iskeychord because the item shortcut only works when item is visible, yes this also made me lose 1 hour of progress
 				{
 					SettingsManager.SaveProject(SettingsManager.lastProjectSavePath);
 				}
@@ -169,6 +168,10 @@ namespace Editor.Gui
 
 				if (ImGui.BeginPopupModal("Project actions", ref popupOpen, ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse | ImGuiWindowFlags.NoDocking))
 				{
+					if(SettingsManager.lastProjectSavePath is not null)
+						ImGui.Text("Nombre del proyecto: " + Path.GetFileName(SettingsManager.lastProjectSavePath));
+					else
+						ImGui.Text("Proyecto sin guardar");
 					ImGui.InputFloat2("Ajustar todas las posiciones por:", ref projectActionsPositionOffset);
 
 					ImGui.SetItemTooltip("Esto añade un valor constante a todas las posiciones de los objetos en el mundo.");
@@ -449,6 +452,7 @@ namespace Editor.Gui
 				if (ImGui.Button("Create hitbox"))
 				{
 					HitboxAnimationObject hitboxAnimationObject = new HitboxAnimationObject(entityName);
+					hitboxAnimationObject.SpawnFrame = (ushort)EditorApplication.State.Animator.CurrentKeyframe;
 
 					EditorApplication.State.HitboxEntities[entityName] = hitboxAnimationObject;
 
@@ -828,7 +832,7 @@ namespace Editor.Gui
 					break;
 				}
 				case SelectionType.Hitbox:
-					ImGui.PushItemWidth(WindowWidth * 0.5f);
+					ImGui.PushItemWidth(WindowWidth * 0.35f);
 					HitboxAnimationObject hitboxObject = (HitboxAnimationObject)obj;
 
 					NVector2 newValue = hitboxObject.Position.CachedValue.ToNumerics();
@@ -841,26 +845,8 @@ namespace Editor.Gui
 					if (ImGui.DragFloat2("Size", ref newValue))
 						hitboxObject.Size.SetKeyframeValue(null, (Vector2)newValue);
 
-					unsafe
-					{
-						handle = GCHandle.Alloc(hitboxObject.SpawnFrame, GCHandleType.Pinned);
-
-						if (ImGui.DragScalar("Frame start", ImGuiDataType.U16, handle.AddrOfPinnedObject()))
-						{
-							hitboxObject.SpawnFrame = *(ushort*)handle.AddrOfPinnedObject();
-						}
-
-						handle.Free();
-
-						handle = GCHandle.Alloc(hitboxObject.FrameDuration, GCHandleType.Pinned);
-
-						if (ImGui.DragScalar("Frame duration", ImGuiDataType.U16, handle.AddrOfPinnedObject()))
-						{
-							hitboxObject.FrameDuration = *(ushort*)handle.AddrOfPinnedObject();
-						}
-
-						handle.Free();
-					}
+					DragUshort("Frame start", ref hitboxObject.SpawnFrame);
+					DragUshort("Frame duration", ref hitboxObject.FrameDuration);
 
 					ImGui.SeparatorText("Propiedades");
 
@@ -873,31 +859,63 @@ namespace Editor.Gui
 						hitboxObject.Type = (HitboxType)index;
 					}
 
-					index = (int)hitboxObject.Conditions;
+					ImGui.SeparatorText("Caracteristicas de golpe");
 
-					if (ImGui.CheckboxFlags("Hit condition", ref index, 15))
+					index = (int)hitboxObject.Conditions;
+					ImGui.CheckboxFlags("Unblockable", ref index, (int)HitboxConditions.Unblockable);
+					ImGui.CheckboxFlags("Grazable", ref index, (int)HitboxConditions.CanBeGrazed);
+					ImGui.CheckboxFlags("Only hits aerial", ref index, (int)HitboxConditions.AerialOnly);
+					ImGui.CheckboxFlags("Only hits grounded", ref index, (int)HitboxConditions.GroundedOnly);
+					
+					ImGui.SeparatorText("Animacion al golpear");
+
+					names = Enum.GetNames(typeof(LaunchType));
+
+					index = (int)hitboxObject.LaunchType;
+
+					if (ImGui.ListBox("Launch type", ref index, names, names.Length))
 					{
+						hitboxObject.LaunchType = (LaunchType)index;
 					}
 
-					ImGui.DragFloat("Damage", ref hitboxObject.Damage);
-					ImGui.DragFloat("HitstunGrowth", ref hitboxObject.HitstunGrowth);
-					ImGui.DragFloat("LaunchAngle", ref hitboxObject.LaunchAngle);
-					ImGui.DragFloat("LaunchPotency", ref hitboxObject.LaunchPotency);
-					ImGui.DragFloat("LaunchPotencyGrowth", ref hitboxObject.LaunchPotencyGrowth);
-					ImGui.DragFloat("LaunchPotencyMax", ref hitboxObject.LaunchPotencyMax);
-					ImGui.DragFloat("ShieldLaunchAngle", ref hitboxObject.ShieldLaunchAngle);
-					ImGui.DragFloat("ShieldPotency", ref hitboxObject.ShieldPotency);
+					ImGui.SeparatorText("Datos");
 
-					DragUshort("Hitstun", ref hitboxObject.Hitstun);
-					DragUshort("MaxHitstun", ref hitboxObject.MaxHitstun);
-					DragUshort("ShieldStun", ref hitboxObject.ShieldStun);
-					DragUshort("DuelGameLag", ref hitboxObject.DuelGameLag);
-					DragUshort("AttackId", ref hitboxObject.AttackId);
-					DragUshort("ImmunityAfterHit", ref hitboxObject.ImmunityAfterHit);
+					switch (hitboxObject.Type)
+					{
+						case HitboxType.Hitbox:
+							ImGui.DragFloat("Damage", ref hitboxObject.Damage);
+							ImGui.DragFloat("Rate", ref hitboxObject.Rate);
+
+							DragUshort("Hitstun", ref hitboxObject.Hitstun);
+							ImGui.DragFloat("Hitstun Growth", ref hitboxObject.HitstunGrowth);
+							DragUshort("MaxHitstun", ref hitboxObject.MaxHitstun);
+
+							DragAngleWithWidget("Launch Angle", ref hitboxObject.LaunchAngle, f => hitboxObject.LaunchAngle = f);
+							ImGui.DragFloat("Launch Potency", ref hitboxObject.LaunchPotency);
+							ImGui.DragFloat("Launch Potency Growth", ref hitboxObject.LaunchPotencyGrowth);
+							ImGui.DragFloat("Launch Potency Max", ref hitboxObject.LaunchPotencyMax);
+
+							DragUshort("ShieldStun", ref hitboxObject.ShieldStun);
+							DragAngleWithWidget("Shield Launch Angle", ref hitboxObject.ShieldLaunchAngle, f => hitboxObject.ShieldLaunchAngle = f);
+							ImGui.DragFloat("ShieldPotency", ref hitboxObject.ShieldPotency);
+
+							DragUshort("DuelGameLag", ref hitboxObject.DuelGameLag);
+							DragUshort("AttackId", ref hitboxObject.AttackId);
+							DragUshort("ImmunityAfterHit", ref hitboxObject.ImmunityAfterHit);
+
+							break;
+						case HitboxType.Windbox:
+							
+							DragAngleWithWidget("Launch Angle", ref hitboxObject.LaunchAngle, f => hitboxObject.LaunchAngle = f);
+							ImGui.DragFloat("Launch Potency", ref hitboxObject.LaunchPotency);
+							ImGui.DragFloat("Launch Potency Growth", ref hitboxObject.LaunchPotencyGrowth);
+							ImGui.DragFloat("Launch Potency Max", ref hitboxObject.LaunchPotencyMax);
+							
+							break;
+					}
+
 					DragUshort("Priority", ref hitboxObject.Priority);
-					DragUshort("FrameDuration", ref hitboxObject.FrameDuration);
-					DragUshort("SpawnFrame", ref hitboxObject.SpawnFrame);
-					
+
 					ImGui.PopItemWidth();
 
 					break;

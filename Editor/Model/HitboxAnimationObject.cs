@@ -35,20 +35,24 @@ namespace Editor.Model
 			ShieldStun = 3; // how much does the hitbox stun the victim's shield on hit
 			DuelGameLag = 2; // amount of time that the game is lagged when in a 1v1 on a successful hit
 			Conditions = HitboxConditions.None; // various conditions of the hitbox hitting
+			LaunchType = LaunchType.TorsoHit;
+			Type = HitboxType.Hitbox;
 			AttackId = 0; // the id of the attack, when hit, all hitbox in the same id cant hit the victim by ImmunityAfterHit frames
 			ImmunityAfterHit = 10; // the amount of frames that the oponent is invulnerable when hitting
 			ShieldLaunchAngle = -50; // the angle that the hitbox launches when hitting a shielding opponent
 			ShieldPotency = 2; // the force that the hitbox launches when hitting a shielding opponent
 			Priority = 0; // the priority of a hitbox, takes effect when multiple hitboxes collide with the victim at the same time, same priority hitboxes are selected randomly
+			Rate = 0.98f;
 		}
 
-		public HitboxConditions Conditions;
 		public ushort Hitstun, MaxHitstun, ShieldStun, DuelGameLag, AttackId, ImmunityAfterHit, Priority, FrameDuration, SpawnFrame;
-		public float Damage, HitstunGrowth, LaunchAngle, LaunchPotency, LaunchPotencyGrowth, LaunchPotencyMax, ShieldLaunchAngle, ShieldPotency;
+		public float Damage, HitstunGrowth, LaunchAngle, LaunchPotency, LaunchPotencyGrowth, LaunchPotencyMax, ShieldLaunchAngle, ShieldPotency, Rate;
 		public Vector2KeyframeValue Size { get; set; }
-		public string Name { get; set; }
 		public Vector2KeyframeValue Position { get; set; }
+		public string Name { get; set; }
 		public HitboxType Type;
+		public LaunchType LaunchType;
+		public HitboxConditions Conditions;
 		public List<string> Tags = new List<string>();
 
 		public HitboxAnimationObject(HitboxAnimationObject clone)
@@ -59,25 +63,35 @@ namespace Editor.Model
 			Position.CloneKeyframeDataFrom(clone.Position);
 			Size.CloneKeyframeDataFrom(clone.Size);
 			Name = clone.Name;
+
 			Damage = clone.Damage;
+			Rate = clone.Rate;
+
 			SpawnFrame = clone.SpawnFrame;
 			FrameDuration = clone.FrameDuration;
+
 			Hitstun = clone.Hitstun;
 			HitstunGrowth = clone.HitstunGrowth;
 			MaxHitstun = clone.MaxHitstun;
+
 			LaunchAngle = clone.LaunchAngle;
 			LaunchPotency = clone.LaunchPotency;
 			LaunchPotencyGrowth = clone.LaunchPotencyGrowth;
 			LaunchPotencyMax = clone.LaunchPotencyMax;
+
 			ShieldStun = clone.ShieldStun;
-			DuelGameLag = clone.DuelGameLag;
-			Conditions = clone.Conditions;
-			AttackId = clone.AttackId;
-			ImmunityAfterHit = clone.ImmunityAfterHit;
 			ShieldLaunchAngle = clone.ShieldLaunchAngle;
 			ShieldPotency = clone.ShieldPotency;
+
+			DuelGameLag = clone.DuelGameLag;
+			AttackId = clone.AttackId;
+			ImmunityAfterHit = clone.ImmunityAfterHit;
+
 			Priority = clone.Priority;
+
 			Type = clone.Type;
+			LaunchType = clone.LaunchType;
+			Conditions = clone.Conditions;
 		}
 
 		public int EndFrame => SpawnFrame + FrameDuration;

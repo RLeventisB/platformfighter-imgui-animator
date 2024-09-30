@@ -105,38 +105,56 @@ namespace Editor.Gui
 
 			return clone;
 		}
+
 		public static bool DragUshort(string name, ref ushort value, float speed = 1)
 		{
-			GCHandle handle = GCHandle.Alloc(value, GCHandleType.Pinned);
-			bool changed = ImGui.DragScalar(name, ImGuiDataType.U16, handle.AddrOfPinnedObject(), speed);
-			handle.Free();
-			return changed;
+			unsafe
+			{
+				GCHandle handle = GCHandle.Alloc(value, GCHandleType.Pinned);
+				bool changed = ImGui.DragScalar(name, ImGuiDataType.U16, handle.AddrOfPinnedObject(), speed);
+
+				if (changed)
+				{
+					value = *(ushort*)handle.AddrOfPinnedObject();
+				}
+
+				handle.Free();
+
+				return changed;
+			}
 		}
+
 		public static bool DragAngleWithWidget(string name, ref float angle, Action<float> setAngle, float speed = 1)
 		{
 			ImDrawListPtr drawList = ImGui.GetWindowDrawList();
-			float height = ImGui.GetTextLineHeight();
+			float height = 35;
+			
+			// ImGui.SetCursorScreenPos(new NVector2(cursorPos.X, cursorPos.Y));
 
-			ImGui.SameLine();
-
-			NVector2 cursorPos = ImGui.GetCursorPos();
-			bool changed = ImGui.DragFloat(name, ref angle, speed);
-		
-			ImGui.SetCursorPosX(cursorPos.X + 5);
-
+			NVector2 cursorPos = ImGui.GetCursorScreenPos();
 			NVector2 center = cursorPos + new NVector2(height / 2);
-			if(ImGui.InvisibleButton("AngleButton", new NVector2(height)))
+
+			ImGui.PushItemFlag(ImGuiItemFlags.ButtonRepeat, true);
+
+			if (ImGui.Button("##AngleButton", new NVector2(height)))
 			{
 				EditorApplication.SetDragAction(new ChangeHitboxAngleAction(center, angle, setAngle));
 			}
-
-			drawList.AddCircle(cursorPos + new NVector2(height / 2), height, Color.White.PackedValue);
-			(float sin, float cos) = MathF.SinCos(angle);
-			NVector2 lineEnd = cursorPos + new NVector2(height / 2 * (1 + cos), height / 2 * (1 + sin));
-			drawList.AddLine(cursorPos + new NVector2(height / 2), lineEnd, Color.White.PackedValue);
 			
+			ImGui.SameLine();
+
+			bool changed = ImGui.DragFloat(name, ref angle, speed);
+
+			ImGui.PopItemFlag();
+
+			drawList.AddCircle(center, height / 2, Color.White.PackedValue);
+			(float sin, float cos) = MathF.SinCos(MathHelper.ToRadians(angle));
+			NVector2 lineEnd = cursorPos + new NVector2(height / 2 * (1 + cos), height / 2 * (1 + sin));
+			drawList.AddLine(center, lineEnd, Color.White.PackedValue);
+
 			return changed;
 		}
+
 		public static Vector2 Rotate(Vector2 v, float degrees)
 		{
 			switch (degrees % 360)

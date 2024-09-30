@@ -5,6 +5,8 @@ using ImGuiNET;
 
 using Microsoft.Xna.Framework;
 
+using System.Linq;
+
 namespace Editor.Gui
 {
 	public static class WorldActions
@@ -12,7 +14,6 @@ namespace Editor.Gui
 		public static void Draw()
 		{
 			bool windowFocused = ImGui.IsWindowHovered();
-			bool selectedObjectBeingHovered = false;
 			bool selectedObjectOrActionsWasHovered = false;
 			bool selectedObjectIsBeingDragged = false;
 
@@ -35,9 +36,8 @@ namespace Editor.Gui
 				// check if the current object is selected!!
 				if (EditorApplication.selectedData.ObjectSelectionType is SelectionType.Graphic or SelectionType.Hitbox)
 				{
-					string name = EditorApplication.selectedData.Name;
 					selectedObjectIsBeingDragged = EditorApplication.currentDragAction is not null && EditorApplication.currentDragAction.ActionName is "MoveGraphicEntityObject" or "MoveHitboxEntityObject";
-					selectedObjectBeingHovered = EditorApplication.selectedData.Reference.IsBeingHovered(Input.MouseWorld, EditorApplication.State.Animator.CurrentKeyframe);
+					bool selectedObjectBeingHovered = EditorApplication.selectedData.Reference.IsBeingHovered(Input.MouseWorld, EditorApplication.State.Animator.CurrentKeyframe);
 
 					if ((ImGui.IsMouseDragging(ImGuiMouseButton.Left) || ImGui.IsMouseClicked(ImGuiMouseButton.Left)) && selectedObjectBeingHovered && windowFocused)
 					{
@@ -45,7 +45,7 @@ namespace Editor.Gui
 						{
 							case TextureAnimationObject textureObject:
 								EditorApplication.SetDragAction(new MoveAnimationObjectPositionAction(textureObject.Position));
-								
+
 								break;
 							case HitboxAnimationObject hitboxEntity:
 							{
@@ -93,7 +93,9 @@ namespace Editor.Gui
 				}
 				else
 				{
-					foreach (TextureAnimationObject entity in EditorApplication.State.Animator.RegisteredGraphics)
+					bool foundHoveredEntity = false;
+
+					foreach (TextureAnimationObject entity in EditorApplication.State.Animator.RegisteredGraphics.OrderByDescending(v => v.ZIndex.CachedValue))
 					{
 						if (!entity.IsBeingHovered(Input.MouseWorld, EditorApplication.State.Animator.CurrentKeyframe))
 							continue;
@@ -102,7 +104,9 @@ namespace Editor.Gui
 							EditorApplication.selectedData = new SelectionData(entity);
 
 						if (!selectedObjectIsBeingDragged && !selectedObjectOrActionsWasHovered)
+						{
 							EditorApplication.hoveredEntityName = entity.Name;
+						}
 
 						break;
 					}

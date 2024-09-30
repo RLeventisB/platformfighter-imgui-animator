@@ -3,6 +3,8 @@ using Editor.Model;
 
 using ImGuiNET;
 
+using Microsoft.Xna.Framework;
+
 using System;
 
 namespace Editor
@@ -10,8 +12,9 @@ namespace Editor
 	public class ChangeHitboxAngleAction : DragAction
 	{
 		public Vector2 CenterToMeasure { get; init; }
-		public Action<float> SetNewAngle {get; init;}
+		public Action<float> SetNewAngle { get; init; }
 		public float InitialAngle;
+
 		public ChangeHitboxAngleAction(Vector2 center, float initialAngle, Action<float> setNewAngle) : base("ChangeHitboxAngleAction", 0f, true)
 		{
 			CenterToMeasure = center;
@@ -19,17 +22,17 @@ namespace Editor
 			InitialAngle = initialAngle;
 			EditorApplication.State.Animator.Stop();
 		}
-		
+
 		public override void OnMoveDrag(Vector2 worldDifference, Vector2 screenDifference)
 		{
-			Vector2 diff = (CenterToMeasure - Input.MousePos);
-			SetNewAngle.Invoke(MathF.Atan2(diff.Y, diff.X));
+			Vector2 diff = Input.MousePos - CenterToMeasure;
+			SetNewAngle.Invoke(MathHelper.ToDegrees(MathF.Atan2(diff.Y, diff.X)));
 		}
 
 		public override void OnRelease()
 		{
-			Vector2 diff = (CenterToMeasure - Input.MousePos);
-			SetNewAngle.Invoke(MathF.Atan2(diff.Y, diff.X));
+			Vector2 diff = Input.MousePos - CenterToMeasure;
+			SetNewAngle.Invoke(MathHelper.ToDegrees(MathF.Atan2(diff.Y, diff.X)));
 		}
 
 		public override void OnCancel()
@@ -77,13 +80,13 @@ namespace Editor
 					break;
 			}
 
-			HitboxAnimationObjectReference.Size.SetKeyframeValue(null,  bottomRight - topLeft);
-			HitboxAnimationObjectReference.Position.SetKeyframeValue(null,  topLeft + HitboxAnimationObjectReference.Size.CachedValue / 2);
+			HitboxAnimationObjectReference.Size.SetKeyframeValue(null, bottomRight - topLeft);
+			HitboxAnimationObjectReference.Position.SetKeyframeValue(null, topLeft + HitboxAnimationObjectReference.Size.CachedValue / 2);
 		}
 
 		public override void OnCancel()
 		{
-			HitboxAnimationObjectReference.Position.SetKeyframeValue(null,  OldPosition);
+			HitboxAnimationObjectReference.Position.SetKeyframeValue(null, OldPosition);
 			HitboxAnimationObjectReference.Size.SetKeyframeValue(null, OldSize);
 		}
 	}
@@ -100,7 +103,7 @@ namespace Editor
 			affectAllKeyframes = ImGui.IsKeyDown(ImGuiKey.ModShift);
 			EditorApplication.State.Animator.Stop();
 		}
-		
+
 		public override void OnMoveDrag(Vector2 worldDifference, Vector2 screenDifference)
 		{
 			accumulatedDifference += worldDifference;
@@ -115,6 +118,7 @@ namespace Editor
 				{
 					keyframe.Value = (Vector2)keyframe.Value + accumulatedDifference;
 				}
+
 				PositionValue.InvalidateCachedValue();
 			}
 			else
@@ -158,9 +162,11 @@ namespace Editor
 			foreach ((KeyframeableValue value, int index) in _dataPairs)
 			{
 				Keyframe keyframe = value.GetKeyframeReferenceAt(index);
+				KeyframeLink link = keyframe.ContainingLink;
 				value.RemoveAt(index);
 				keyframe.Frame = hoveringFrame;
-				value.Add(keyframe);
+				keyframe.ContainingLink = link;
+				link.Add(keyframe);
 				value.SortFrames();
 			}
 		}
@@ -217,7 +223,6 @@ namespace Editor
 		public DragAction(string name, float distanceForMove = 0, bool cancellableWithEscape = false)
 		{
 			DistanceToStartMoving = distanceForMove * distanceForMove;
-			HasStartedMoving = distanceForMove == 0;
 			ActionName = name;
 			CancellableWithEscape = cancellableWithEscape;
 			StartPos = Input.MousePos;
@@ -239,7 +244,7 @@ namespace Editor
 			Vector2 worldCursorPos = Input.MouseWorld;
 			Vector2 oldWorldCursorPos = Input.PreviousMouseWorld;
 
-			if (!HasStartedMoving && Vector2.DistanceSquared(cursorPos, StartPos) > DistanceToStartMoving) // waiting for big movement
+			if (!HasStartedMoving && Vector2.DistanceSquared(cursorPos, StartPos) >= DistanceToStartMoving) // waiting for big movement
 			{
 				OnMoveDrag(cursorPos - StartPos, worldCursorPos - StartPosWorld);
 				HasStartedMoving = true;
