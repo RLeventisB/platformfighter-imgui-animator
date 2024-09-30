@@ -873,6 +873,31 @@ namespace Editor.Gui
 						hitboxObject.Type = (HitboxType)index;
 					}
 
+					index = (int)hitboxObject.Conditions;
+
+					if (ImGui.CheckboxFlags("Hit condition", ref index, 15))
+					{
+					}
+
+					ImGui.DragFloat("Damage", ref hitboxObject.Damage);
+					ImGui.DragFloat("HitstunGrowth", ref hitboxObject.HitstunGrowth);
+					ImGui.DragFloat("LaunchAngle", ref hitboxObject.LaunchAngle);
+					ImGui.DragFloat("LaunchPotency", ref hitboxObject.LaunchPotency);
+					ImGui.DragFloat("LaunchPotencyGrowth", ref hitboxObject.LaunchPotencyGrowth);
+					ImGui.DragFloat("LaunchPotencyMax", ref hitboxObject.LaunchPotencyMax);
+					ImGui.DragFloat("ShieldLaunchAngle", ref hitboxObject.ShieldLaunchAngle);
+					ImGui.DragFloat("ShieldPotency", ref hitboxObject.ShieldPotency);
+
+					DragUshort("Hitstun", ref hitboxObject.Hitstun);
+					DragUshort("MaxHitstun", ref hitboxObject.MaxHitstun);
+					DragUshort("ShieldStun", ref hitboxObject.ShieldStun);
+					DragUshort("DuelGameLag", ref hitboxObject.DuelGameLag);
+					DragUshort("AttackId", ref hitboxObject.AttackId);
+					DragUshort("ImmunityAfterHit", ref hitboxObject.ImmunityAfterHit);
+					DragUshort("Priority", ref hitboxObject.Priority);
+					DragUshort("FrameDuration", ref hitboxObject.FrameDuration);
+					DragUshort("SpawnFrame", ref hitboxObject.SpawnFrame);
+					
 					ImGui.PopItemWidth();
 
 					break;

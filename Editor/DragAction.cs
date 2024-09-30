@@ -7,6 +7,36 @@ using System;
 
 namespace Editor
 {
+	public class ChangeHitboxAngleAction : DragAction
+	{
+		public Vector2 CenterToMeasure { get; init; }
+		public Action<float> SetNewAngle {get; init;}
+		public float InitialAngle;
+		public ChangeHitboxAngleAction(Vector2 center, float initialAngle, Action<float> setNewAngle) : base("ChangeHitboxAngleAction", 0f, true)
+		{
+			CenterToMeasure = center;
+			SetNewAngle = setNewAngle;
+			InitialAngle = initialAngle;
+			EditorApplication.State.Animator.Stop();
+		}
+		
+		public override void OnMoveDrag(Vector2 worldDifference, Vector2 screenDifference)
+		{
+			Vector2 diff = (CenterToMeasure - Input.MousePos);
+			SetNewAngle.Invoke(MathF.Atan2(diff.Y, diff.X));
+		}
+
+		public override void OnRelease()
+		{
+			Vector2 diff = (CenterToMeasure - Input.MousePos);
+			SetNewAngle.Invoke(MathF.Atan2(diff.Y, diff.X));
+		}
+
+		public override void OnCancel()
+		{
+			SetNewAngle.Invoke(InitialAngle);
+		}
+	}
 	public class HitboxMoveSizeDragAction : DragAction
 	{
 		public HitboxLine SelectedLine { get; }
