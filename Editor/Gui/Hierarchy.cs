@@ -21,6 +21,7 @@ namespace Editor.Gui
 		public static Vector2 PivotViewerOffset = Vector2.Zero;
 		private static NVector2 projectActionsPositionOffset;
 		private static float projectActionsKeyframeMult = 1;
+		private static IAnimationObject objectToRename;
 
 		public static void Draw()
 		{
@@ -147,8 +148,10 @@ namespace Editor.Gui
 
 				if (ImGui.Checkbox("##Hitbox viewer mode", ref Timeline.HitboxMode))
 				{
-					if (EditorApplication.selectedData.ObjectSelectionType is SelectionType.Graphic or SelectionType.Hitbox)
+					if (EditorApplication.selectedData.Type is SelectionType.Graphic or SelectionType.Hitbox)
+					{
 						EditorApplication.selectedData.Empty();
+					}
 				}
 
 				ImGui.SetItemTooltip("Cambiar a editor de hitboxes");
@@ -168,10 +171,11 @@ namespace Editor.Gui
 
 				if (ImGui.BeginPopupModal("Project actions", ref popupOpen, ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse | ImGuiWindowFlags.NoDocking))
 				{
-					if(SettingsManager.lastProjectSavePath is not null)
+					if (SettingsManager.lastProjectSavePath is not null)
 						ImGui.Text("Nombre del proyecto: " + Path.GetFileName(SettingsManager.lastProjectSavePath));
 					else
 						ImGui.Text("Proyecto sin guardar");
+
 					ImGui.InputFloat2("Ajustar todas las posiciones por:", ref projectActionsPositionOffset);
 
 					ImGui.SetItemTooltip("Esto añade un valor constante a todas las posiciones de los objetos en el mundo.");
@@ -270,6 +274,41 @@ namespace Editor.Gui
 
 					ImGui.SetItemTooltip("Borra los fotogramas que no son primarios, esto incluye los enlaces.\nSirve solo para tener la primera \"pose\"");
 
+					if (ImGui.Button("Enlazar todos los fotogramas vacios"))
+					{
+						foreach (TextureAnimationObject textureobject in EditorApplication.State.Animator.RegisteredGraphics)
+						{
+							foreach (KeyframeableValue value in textureobject.EnumerateKeyframeableValues())
+							{
+								IEnumerable<Keyframe> loneKeyframes = value.keyframes.Where(v => v.ContainingLink is null);
+
+								if (loneKeyframes.Count() > 1)
+								{
+									value.AddLink(new KeyframeLink(value, loneKeyframes));
+
+									value.CacheValue(null);
+								}
+							}
+						}
+
+						foreach (HitboxAnimationObject hitboxObject in EditorApplication.State.Animator.RegisteredHitboxes)
+						{
+							foreach (KeyframeableValue value in hitboxObject.EnumerateKeyframeableValues())
+							{
+								IEnumerable<Keyframe> loneKeyframes = value.keyframes.Where(v => v.ContainingLink is null);
+
+								if (loneKeyframes.Count() > 1)
+								{
+									value.AddLink(new KeyframeLink(value, loneKeyframes));
+
+									value.CacheValue(null);
+								}
+							}
+						}
+					}
+
+					ImGui.SetItemTooltip("Añade un enlace default que incluye todos los fotogramas que no tienen algun fotograma, mientras hayan mas de 2.");
+
 					ImGui.EndPopup();
 				}
 			}
@@ -293,6 +332,38 @@ namespace Editor.Gui
 				hoveredItem |= DrawHitboxEntitiesHierarchy();
 
 				DrawTextureHierarchy();
+
+				bool popupOpen = true;
+
+				if (objectToRename is not null && ImGui.BeginPopupModal("Rename object", ref popupOpen, ImGuiWindowFlags.Modal | ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoResize))
+				{
+					ImGui.SetWindowSize(new NVector2(400, 100));
+					string input = SavedInput("Nuevo nombre:", string.Empty, out _);
+
+					ImGui.SetNextItemShortcut(ImGuiKey.Enter);
+
+					if (ImGui.Button("Renombrar"))
+					{
+						if (EditorApplication.selectedData.Type == SelectionType.Hitbox)
+						{
+							EditorApplication.RenameEntity(objectToRename, input);
+							objectToRename = null;
+						}
+
+						ImGui.CloseCurrentPopup();
+					}
+
+					ImGui.SetNextItemShortcut(ImGuiKey.Escape);
+					ImGui.SameLine();
+
+					if (ImGui.Button("Cancelar"))
+					{
+						ImGui.CloseCurrentPopup();
+						objectToRename = null;
+					}
+
+					ImGui.EndPopup();
+				}
 
 				if (!hoveredItem)
 					EditorApplication.hoveredEntityName = string.Empty;
@@ -331,7 +402,7 @@ namespace Editor.Gui
 
 				EditorApplication.State.Textures[name] = frame;
 
-				EditorApplication.selectedData = new SelectionData(frame);
+				EditorApplication.selectedData.Set(frame);
 			});
 
 			// show all loaded textures
@@ -340,17 +411,15 @@ namespace Editor.Gui
 			for (int i = 0; i < EditorApplication.State.Textures.Count; i++)
 			{
 				TextureFrame texture = EditorApplication.State.Textures.Values.ToArray()[i];
-				bool selected = EditorApplication.selectedData.IsOf(texture);
+				bool selected = EditorApplication.selectedData.IsOnlyThis(texture);
 
 				if (ImGui.Selectable(texture.Name + "##texture", ref selected))
 				{
-					EditorApplication.selectedData = new SelectionData(texture);
+					EditorApplication.selectedData.Set(texture);
 				}
 
 				if (ImGui.BeginPopupContextItem(texture.Name, ImGuiPopupFlags.NoReopen | ImGuiPopupFlags.MouseButtonRight))
 				{
-					EditorApplication.selectedData = new SelectionData(texture);
-
 					if (ImGui.Button($"{IcoMoon.MinusIcon} Borrar"))
 					{
 						texture.Remove();
@@ -385,7 +454,7 @@ namespace Editor.Gui
 
 						EditorApplication.State.Textures[name] = duplicatedFrame;
 
-						EditorApplication.selectedData = new SelectionData(duplicatedFrame);
+						EditorApplication.selectedData.Set(duplicatedFrame);
 
 						ImGui.CloseCurrentPopup();
 						ImGui.EndPopup();
@@ -406,9 +475,9 @@ namespace Editor.Gui
 
 				if (ImGui.Button("Renombrar"))
 				{
-					if (EditorApplication.selectedData.ObjectSelectionType == SelectionType.Texture)
+					if (EditorApplication.selectedData.Type == SelectionType.Texture)
 					{
-						TextureFrame frame = (TextureFrame)EditorApplication.selectedData.Reference;
+						TextureFrame frame = (TextureFrame)EditorApplication.selectedData.GetLoneObject();
 						EditorApplication.RenameTexture(frame, input);
 					}
 
@@ -456,7 +525,7 @@ namespace Editor.Gui
 
 					EditorApplication.State.HitboxEntities[entityName] = hitboxAnimationObject;
 
-					EditorApplication.selectedData = new SelectionData(hitboxAnimationObject);
+					EditorApplication.selectedData.Set(hitboxAnimationObject);
 
 					ImGui.CloseCurrentPopup();
 				}
@@ -479,12 +548,12 @@ namespace Editor.Gui
 			for (int i = 0; i < EditorApplication.State.HitboxEntities.Count; i++)
 			{
 				HitboxAnimationObject entity = EditorApplication.State.HitboxEntities.Values.ToArray()[i];
-				bool selected = EditorApplication.selectedData.IsOf(entity);
+				bool selected = EditorApplication.selectedData.Contains(entity);
 
 				if (ImGui.Selectable(entity.Name + "##hitbox", ref selected) && selected)
 				{
-					changedSelectedObject = EditorApplication.selectedData.IsNotButSameType(entity);
-					EditorApplication.selectedData = new SelectionData(entity);
+					changedSelectedObject = !EditorApplication.selectedData.IsOnlyThis(entity);
+					EditorApplication.selectedData.SetOrAdd(entity);
 				}
 
 				if (ImGui.BeginPopupContextItem())
@@ -492,8 +561,8 @@ namespace Editor.Gui
 					if (ImGui.Button($"{IcoMoon.MinusIcon} Remove"))
 					{
 						EditorApplication.State.HitboxEntities.Remove(entity.Name);
-						if (EditorApplication.selectedData.IsOf(entity))
-							EditorApplication.selectedData.Empty();
+						if (EditorApplication.selectedData.Contains(entity))
+							EditorApplication.selectedData.Deselect(entity);
 
 						continue;
 					}
@@ -511,7 +580,7 @@ namespace Editor.Gui
 						newObject.Name = name;
 
 						EditorApplication.State.HitboxEntities.Add(name, newObject);
-						EditorApplication.selectedData = new SelectionData(newObject);
+						EditorApplication.selectedData.Set(newObject);
 
 						ImGui.CloseCurrentPopup();
 
@@ -524,7 +593,7 @@ namespace Editor.Gui
 						ImGui.CloseCurrentPopup();
 						ImGui.EndPopup();
 
-						ImGui.OpenPopup("Renombrar hitbox");
+						OpenRenamePopup(entity);
 
 						continue;
 					}
@@ -538,37 +607,6 @@ namespace Editor.Gui
 				itemHovered = true;
 			}
 
-			bool popupOpen = true;
-
-			if (ImGui.BeginPopupModal("Renombrar hitbox", ref popupOpen, ImGuiWindowFlags.Modal | ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoResize))
-			{
-				ImGui.SetWindowSize(new NVector2(400, 100));
-				string input = SavedInput("Nuevo nombre:", string.Empty, out _);
-
-				ImGui.SetNextItemShortcut(ImGuiKey.Enter);
-
-				if (ImGui.Button("Renombrar"))
-				{
-					if (EditorApplication.selectedData.ObjectSelectionType == SelectionType.Hitbox)
-					{
-						HitboxAnimationObject animationObject = (HitboxAnimationObject)EditorApplication.selectedData.Reference;
-						EditorApplication.RenameEntity(animationObject, input);
-					}
-
-					ImGui.CloseCurrentPopup();
-				}
-
-				ImGui.SetNextItemShortcut(ImGuiKey.Escape);
-				ImGui.SameLine();
-
-				if (ImGui.Button("Cancelar"))
-				{
-					ImGui.CloseCurrentPopup();
-				}
-
-				ImGui.EndPopup();
-			}
-
 			if (changedSelectedObject)
 			{
 				ResetSavedInput();
@@ -579,6 +617,11 @@ namespace Editor.Gui
 			ImGui.EndDisabled();
 
 			return itemHovered;
+		}
+
+		public static void OpenRenamePopup(IAnimationObject obj)
+		{
+			objectToRename = obj;
 		}
 
 		private static bool DrawGraphicEntitiesHierarchy()
@@ -604,7 +647,7 @@ namespace Editor.Gui
 
 				EditorApplication.State.GraphicEntities[name] = textureAnimationObject;
 
-				EditorApplication.selectedData = new SelectionData(textureAnimationObject);
+				EditorApplication.selectedData.Set(textureAnimationObject);
 			});
 
 			// show all created entities
@@ -614,12 +657,12 @@ namespace Editor.Gui
 			for (int i = 0; i < EditorApplication.State.GraphicEntities.Count; i++)
 			{
 				TextureAnimationObject entity = EditorApplication.State.GraphicEntities.Values.ToArray()[i];
-				bool selected = EditorApplication.selectedData.IsOf(entity);
+				bool selected = EditorApplication.selectedData.Contains(entity);
 
 				if (ImGui.Selectable(entity.Name + "##graphic", ref selected) && selected)
 				{
-					changedSelectedObject = EditorApplication.selectedData.IsNotButSameType(entity);
-					EditorApplication.selectedData = new SelectionData(entity);
+					changedSelectedObject = !EditorApplication.selectedData.IsOnlyThis(entity);
+					EditorApplication.selectedData.SetOrAdd(entity);
 				}
 
 				if (ImGui.BeginPopupContextItem())
@@ -627,8 +670,8 @@ namespace Editor.Gui
 					if (ImGui.Button($"{IcoMoon.MinusIcon} Remove"))
 					{
 						EditorApplication.State.GraphicEntities.Remove(entity.Name);
-						if (EditorApplication.selectedData.IsOf(entity))
-							EditorApplication.selectedData.Empty();
+						if (EditorApplication.selectedData.Contains(entity))
+							EditorApplication.selectedData.Deselect(entity);
 
 						continue;
 					}
@@ -653,7 +696,7 @@ namespace Editor.Gui
 						}
 
 						EditorApplication.State.GraphicEntities.Add(name, newObject);
-						EditorApplication.selectedData = new SelectionData(newObject);
+						EditorApplication.selectedData.Set(newObject);
 
 						ImGui.CloseCurrentPopup();
 
@@ -686,7 +729,7 @@ namespace Editor.Gui
 		{
 			ImGui.BeginChild("Selected Entity Properties", new NVector2(WindowWidth, 0), ImGuiChildFlags.FrameStyle | ImGuiChildFlags.ResizeY, ImGuiWindowFlags.AlwaysAutoResize);
 			ImGui.Text($"{IcoMoon.EqualizerIcon} Properties");
-			bool isSelectedDataValid = EditorApplication.selectedData.GetValue(out IAnimationObject obj);
+			bool isSelectedDataValid = EditorApplication.selectedData.IsLone();
 			GCHandle handle;
 
 			if (!isSelectedDataValid)
@@ -696,11 +739,11 @@ namespace Editor.Gui
 				return;
 			}
 
-			switch (EditorApplication.selectedData.ObjectSelectionType)
+			switch (EditorApplication.selectedData.Type)
 			{
 				case SelectionType.Graphic:
 				{
-					TextureAnimationObject textureObject = (TextureAnimationObject)obj;
+					TextureAnimationObject textureObject = (TextureAnimationObject)EditorApplication.selectedData.GetLoneObject();
 
 					string tempEntityName = SavedInput(string.Empty, textureObject.Name, out _);
 					ImGui.SameLine();
@@ -716,6 +759,11 @@ namespace Editor.Gui
 						selectedTextureOnEntityCreator = -1;
 						ImGui.OpenPopup("Cambiar grafico de entidad");
 						ResetSavedInput();
+					}
+
+					if (ImGui.Button("Seleccionar textura"))
+					{
+						EditorApplication.selectedData.Set(EditorApplication.State.Textures[textureObject.TextureName]);
 					}
 
 					if (ImGui.BeginPopupModal("Cambiar grafico de entidad", ImGuiWindowFlags.AlwaysAutoResize))
@@ -833,7 +881,7 @@ namespace Editor.Gui
 				}
 				case SelectionType.Hitbox:
 					ImGui.PushItemWidth(WindowWidth * 0.35f);
-					HitboxAnimationObject hitboxObject = (HitboxAnimationObject)obj;
+					HitboxAnimationObject hitboxObject = (HitboxAnimationObject)EditorApplication.selectedData.GetLoneObject();
 
 					NVector2 newValue = hitboxObject.Position.CachedValue.ToNumerics();
 
@@ -866,7 +914,7 @@ namespace Editor.Gui
 					ImGui.CheckboxFlags("Grazable", ref index, (int)HitboxConditions.CanBeGrazed);
 					ImGui.CheckboxFlags("Only hits aerial", ref index, (int)HitboxConditions.AerialOnly);
 					ImGui.CheckboxFlags("Only hits grounded", ref index, (int)HitboxConditions.GroundedOnly);
-					
+
 					ImGui.SeparatorText("Animacion al golpear");
 
 					names = Enum.GetNames(typeof(LaunchType));
@@ -905,12 +953,12 @@ namespace Editor.Gui
 
 							break;
 						case HitboxType.Windbox:
-							
+
 							DragAngleWithWidget("Launch Angle", ref hitboxObject.LaunchAngle, f => hitboxObject.LaunchAngle = f);
 							ImGui.DragFloat("Launch Potency", ref hitboxObject.LaunchPotency);
 							ImGui.DragFloat("Launch Potency Growth", ref hitboxObject.LaunchPotencyGrowth);
 							ImGui.DragFloat("Launch Potency Max", ref hitboxObject.LaunchPotencyMax);
-							
+
 							break;
 					}
 
@@ -921,7 +969,7 @@ namespace Editor.Gui
 					break;
 				case SelectionType.Texture:
 				{
-					TextureFrame selectedTexture = (TextureFrame)obj;
+					TextureFrame selectedTexture = (TextureFrame)EditorApplication.selectedData.GetLoneObject();
 					Point currentFrameSize = selectedTexture.FrameSize;
 					Point currentFramePosition = selectedTexture.FramePosition;
 					NVector2 currentPivot = selectedTexture.Pivot;

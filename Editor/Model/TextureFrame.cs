@@ -178,7 +178,7 @@ namespace Editor.Model
 			return f.Texture;
 		}
 
-		public bool IsBeingHovered(Vector2 mouseWorld, int frame) => false;
+		public bool IsBeingHovered(Vector2 mouseWorld, int? frame) => false;
 
 		public List<KeyframeableValue> EnumerateKeyframeableValues() => [];
 
@@ -191,8 +191,7 @@ namespace Editor.Model
 		public void Remove()
 		{
 			EditorApplication.State.Textures.Remove(Name);
-			if (EditorApplication.selectedData.IsOf(this))
-				EditorApplication.selectedData.Empty();
+			EditorApplication.selectedData.Deselect(this);
 
 			if (Path == "Syntetic")
 			{

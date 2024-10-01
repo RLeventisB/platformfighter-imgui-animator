@@ -41,7 +41,7 @@ namespace Editor.Model
 		public override void CacheValue(int? frame)
 		{
 			frame ??= EditorApplication.State.Animator.CurrentKeyframe;
-			
+
 			Interpolate(this, frame.Value, Vector2Interpolator, out object value);
 			cachedValue = (value, frame.Value);
 		}
@@ -57,7 +57,7 @@ namespace Editor.Model
 		{
 		}
 
-		public float CachedValue => (float)(cachedValue.value ?? 0);
+		public float CachedValue => (float)(cachedValue.value ?? 0f);
 
 		public float Interpolate(int frame)
 		{
@@ -488,7 +488,7 @@ namespace Editor.Model
 				return false;
 
 			keyframes.RemoveAt(index);
-			
+
 			InvalidateCachedValue();
 
 			return true;

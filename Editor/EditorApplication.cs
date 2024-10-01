@@ -252,20 +252,12 @@ namespace Editor
 			if (!string.IsNullOrEmpty(hoveredEntityName))
 				DrawSpriteBounds(hoveredEntityName, Color.CornflowerBlue); // this could probably be moved to primitivebatch
 
-			if (selectedData.ObjectSelectionType == SelectionType.Graphic)
+			if (selectedData.Type == SelectionType.Graphic)
 			{
-				DrawSpriteBounds(selectedData.Name, Color.Red);
-
-				/*if(selectedData.Reference is TextureAnimationObject textureObject)
-				for (int x = -500; x <= 500; x+=10)
+				foreach (SelectedObject obj in selectedData)
 				{
-					for (int y = -500; y <= 500; y+=10)
-					{
-						Vector2 pos = textureObject.Position.CachedValue + new Vector2(x, y);
-						bool hover = textureObject.IsBeingHovered(pos, State.Animator.CurrentKeyframe);
-						primitiveBatch.DrawBox(new Vector3(pos, 0), new Vector3(1, 1, 1), hover ? Color.Green : Color.Red, PrimitiveBatch.DrawStyle.Wireframe);
-					}
-				}*/
+					DrawSpriteBounds(obj.Name, Color.Red);
+				}
 			}
 
 			if (Timeline.selectedLink != null)
@@ -311,7 +303,7 @@ namespace Editor
 				Vector3 size3d = new Vector3(size, 0);
 				Color color = entity.GetColor();
 
-				bool isSelected = selectedData.IsOf(entity);
+				bool isSelected = selectedData.Contains(entity);
 
 				if (isSelected)
 				{
@@ -556,7 +548,7 @@ namespace Editor
 					break;
 			}
 
-			selectedData = new SelectionData(animationObject);
+			selectedData.Set(animationObject);
 		}
 
 		public static void RenameTexture(TextureFrame textureFrame, string newName)
@@ -574,7 +566,7 @@ namespace Editor
 				}
 			}
 
-			selectedData = new SelectionData(textureFrame);
+			selectedData.Set(textureFrame);
 		}
 
 		public static void SelectLink(KeyframeLink link)
@@ -594,7 +586,17 @@ namespace Editor
 
 		public static JsonData GetJsonObject()
 		{
-			return new JsonData(State.Animator.FPS, State.Animator.CurrentKeyframe, State.Textures.Values.ToArray(), State.GraphicEntities.Values.ToArray(), State.HitboxEntities.Values.ToArray());
+			return new JsonData
+			(
+				State.Animator.Looping,
+				State.Animator.Playing,
+				State.Animator.PlayingBackward,
+				State.Animator.FPS,
+				State.Animator.CurrentKeyframe,
+				State.Textures.Values.ToArray(),
+				State.GraphicEntities.Values.ToArray(),
+				State.HitboxEntities.Values.ToArray()
+			);
 		}
 
 		public static void ApplyJsonData(JsonData data)
@@ -681,12 +683,15 @@ namespace Editor
 			State.Animator.FPS = data.selectedFps;
 			State.Animator.CurrentKeyframe = 0;
 			State.Animator.CurrentKeyframe = data.currentKeyframe;
+			State.Animator.Looping = data.looping;
+			State.Animator.PlayingForward = data.playingForward;
+			State.Animator.PlayingBackward = data.playingBackwards;
 		}
 	}
-	public record JsonData(int selectedFps, int currentKeyframe, TextureFrame[] textures, TextureAnimationObject[] graphicObjects, HitboxAnimationObject[] hitboxObjects)
+	public record JsonData(bool looping, bool playingForward, bool playingBackwards, int selectedFps, int currentKeyframe, TextureFrame[] textures, TextureAnimationObject[] graphicObjects, HitboxAnimationObject[] hitboxObjects)
 	{
 		[JsonConstructor]
-		public JsonData() : this(0, 0, Array.Empty<TextureFrame>(), Array.Empty<TextureAnimationObject>(), Array.Empty<HitboxAnimationObject>())
+		public JsonData() : this(false, false, false, 0, 0, Array.Empty<TextureFrame>(), Array.Empty<TextureAnimationObject>(), Array.Empty<HitboxAnimationObject>())
 		{
 		}
 	}

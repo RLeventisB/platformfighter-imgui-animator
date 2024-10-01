@@ -96,9 +96,11 @@ namespace Editor.Model
 
 		public int EndFrame => SpawnFrame + FrameDuration;
 
-		public bool IsBeingHovered(Vector2 mouseWorld, int frame)
+		public bool IsBeingHovered(Vector2 mouseWorld, int? frame)
 		{
-			return IsOnFrame(frame) && IsInsideRectangle(Position.CachedValue, Size.CachedValue, mouseWorld);
+			frame ??= EditorApplication.State.Animator.CurrentKeyframe;
+
+			return IsOnFrame(frame.Value) && IsInsideRectangle(Position.CachedValue, Size.CachedValue, mouseWorld);
 		}
 
 		public bool IsOnFrame(int frame)

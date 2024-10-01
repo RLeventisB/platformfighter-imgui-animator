@@ -6,6 +6,7 @@ using ImGuiNET;
 using Microsoft.Xna.Framework;
 
 using System;
+using System.Linq;
 
 namespace Editor
 {
@@ -52,7 +53,7 @@ namespace Editor
 			HitboxAnimationObjectReference = hitboxAnimationObject;
 			OldPosition = hitboxAnimationObject.Position.CachedValue;
 			OldSize = hitboxAnimationObject.Size.CachedValue;
-			EditorApplication.selectedData = new SelectionData(HitboxAnimationObjectReference); // just in case you click out of the box
+			EditorApplication.selectedData.Set(HitboxAnimationObjectReference); // just in case you click out of the box (todo: this doesnt work)
 		}
 
 		public override void OnMoveDrag(Vector2 worldDifference, Vector2 screenDifference)
@@ -92,44 +93,63 @@ namespace Editor
 	}
 	public class MoveAnimationObjectPositionAction : DragAction
 	{
-		public Vector2KeyframeValue PositionValue { get; init; }
-		public Vector2 oldCachedValue, accumulatedDifference;
+		public (Vector2KeyframeValue value, Vector2 startPos)[] Values { get; init; }
+		public Vector2 accumulatedDifference;
 		public bool affectAllKeyframes;
 
-		public MoveAnimationObjectPositionAction(Vector2KeyframeValue positionValue) : base("MoveAnimObjectPosition", 3f, true)
+		public MoveAnimationObjectPositionAction(Vector2KeyframeValue[] positionValue) : base("MoveAnimObjectPosition", 3f, true)
 		{
-			PositionValue = positionValue;
-			oldCachedValue = positionValue.CachedValue;
-			affectAllKeyframes = ImGui.IsKeyDown(ImGuiKey.ModShift);
+			Values = positionValue.Select(v => (v, v.CachedValue)).ToArray();
+			affectAllKeyframes = ImGui.IsKeyDown(ImGuiKey.ModShift) && positionValue.Length == 1;
 			EditorApplication.State.Animator.Stop();
 		}
 
 		public override void OnMoveDrag(Vector2 worldDifference, Vector2 screenDifference)
 		{
 			accumulatedDifference += worldDifference;
-			PositionValue.SetKeyframeValue(null, oldCachedValue + accumulatedDifference, true);
+
+			foreach ((Vector2KeyframeValue value, Vector2 startPos) in Values)
+			{
+				value.SetKeyframeValue(null, startPos + accumulatedDifference, true);
+			}
 		}
 
 		public override void OnRelease()
 		{
 			if (affectAllKeyframes)
 			{
-				foreach (Keyframe keyframe in PositionValue.keyframes)
+				foreach ((Vector2KeyframeValue value, Vector2 startPos) in Values)
 				{
-					keyframe.Value = (Vector2)keyframe.Value + accumulatedDifference;
-				}
+					foreach (Keyframe keyframe in value.keyframes)
+					{
+						if (keyframe.Frame == EditorApplication.State.Animator.CurrentKeyframe)
+						{
+							keyframe.Value = startPos + accumulatedDifference;
+						}
+						else
+						{
+							keyframe.Value = (Vector2)keyframe.Value + accumulatedDifference;
+						}
+					}
 
-				PositionValue.InvalidateCachedValue();
+					value.InvalidateCachedValue();
+				}
 			}
 			else
 			{
-				PositionValue.SetKeyframeValue(null, oldCachedValue + accumulatedDifference);
+				foreach ((Vector2KeyframeValue value, Vector2 startPos) in Values)
+				{
+					value.SetKeyframeValue(null, startPos + accumulatedDifference);
+				}
 			}
 		}
 
 		public override void OnCancel()
 		{
-			PositionValue.SetKeyframeValue(null, oldCachedValue, true);
+			foreach ((Vector2KeyframeValue value, Vector2 startPos) in Values)
+			{
+				value.SetKeyframeValue(null, startPos, true);
+			}
 		}
 	}
 	public class MoveKeyframeDelegateAction : DragAction
@@ -166,7 +186,8 @@ namespace Editor
 				value.RemoveAt(index);
 				keyframe.Frame = hoveringFrame;
 				keyframe.ContainingLink = link;
-				link.Add(keyframe);
+				value.Add(keyframe);
+				link?.Add(keyframe);
 				value.SortFrames();
 			}
 		}

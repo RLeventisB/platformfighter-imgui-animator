@@ -147,7 +147,7 @@ namespace Editor.Gui
 					float oldTimelineZoomTarget = zoomTarget; // im lazy
 					float headerHeightOrsmting = ImGui.GetItemRectSize().Y;
 					float endingFrame = visibleStartingFrame + (visibleEndingFrame - visibleStartingFrame) / TimelineZoom;
-					bool isSelectedEntityValid = EditorApplication.selectedData.GetValue(out IAnimationObject selectedEntity) && EditorApplication.selectedData.ObjectSelectionType is SelectionType.Graphic or SelectionType.Hitbox;
+					bool isSelectedEntityValid = EditorApplication.selectedData.IsLone() && EditorApplication.selectedData.Type is SelectionType.Graphic or SelectionType.Hitbox;
 
 					DrawTimeline(animator, isSelectedEntityValid, style.ItemSpacing.Y, headerHeightOrsmting);
 
@@ -161,7 +161,7 @@ namespace Editor.Gui
 							ImGui.Columns(2, "##legend", false);
 							ImGui.SetColumnWidth(0, currentLegendWidth);
 
-							 RenderSelectedEntityKeyframes(selectedEntity, animator, endingFrame, headerHeightOrsmting, oldTimelineZoomTarget);
+							RenderSelectedEntityKeyframes(EditorApplication.selectedData.GetLoneObject(), animator, endingFrame, headerHeightOrsmting, oldTimelineZoomTarget);
 						}
 
 						ImGui.EndChild();

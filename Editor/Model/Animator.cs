@@ -53,13 +53,13 @@ namespace Editor.Model
 			}
 		}
 
-		public bool Looping { get; private set; }
+		public bool Looping { get; set; }
 
 		public bool Playing => PlayingBackward || PlayingForward;
 
-		public bool PlayingBackward { get; private set; }
+		public bool PlayingBackward { get; set; }
 
-		public bool PlayingForward { get; private set; }
+		public bool PlayingForward { get; set; }
 
 		public void PlayBackward()
 		{

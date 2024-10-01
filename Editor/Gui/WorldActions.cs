@@ -31,41 +31,69 @@ namespace Editor.Gui
 				}
 			}
 
-			if (!EditorApplication.selectedData.IsEmpty())
+			if (!EditorApplication.selectedData.IsEmpty() && EditorApplication.selectedData.Type is SelectionType.Graphic or SelectionType.Hitbox)
 			{
-				// check if the current object is selected!!
-				if (EditorApplication.selectedData.ObjectSelectionType is SelectionType.Graphic or SelectionType.Hitbox)
+				selectedObjectIsBeingDragged = EditorApplication.currentDragAction is not null && EditorApplication.currentDragAction.ActionName is "MoveGraphicEntityObject" or "MoveHitboxEntityObject";
+
+				if (EditorApplication.selectedData.IsLone())
 				{
-					selectedObjectIsBeingDragged = EditorApplication.currentDragAction is not null && EditorApplication.currentDragAction.ActionName is "MoveGraphicEntityObject" or "MoveHitboxEntityObject";
-					bool selectedObjectBeingHovered = EditorApplication.selectedData.Reference.IsBeingHovered(Input.MouseWorld, EditorApplication.State.Animator.CurrentKeyframe);
+					IAnimationObject obj = EditorApplication.selectedData.GetLoneObject();
+					bool isThisObjectHovered = obj.IsBeingHovered(Input.MouseWorld, EditorApplication.State.Animator.CurrentKeyframe);
 
-					if ((ImGui.IsMouseDragging(ImGuiMouseButton.Left) || ImGui.IsMouseClicked(ImGuiMouseButton.Left)) && selectedObjectBeingHovered && windowFocused)
+					if (ImGui.IsMouseClicked(ImGuiMouseButton.Left))
 					{
-						switch (EditorApplication.selectedData.Reference)
+						switch (obj)
 						{
-							case TextureAnimationObject textureObject:
-								EditorApplication.SetDragAction(new MoveAnimationObjectPositionAction(textureObject.Position));
-
-								break;
-							case HitboxAnimationObject hitboxEntity:
+							case HitboxAnimationObject hitboxObject:
 							{
-								HitboxLine selectedLine = hitboxEntity.GetSelectedLine(Input.MouseWorld);
+								HitboxLine selectedLine = hitboxObject.GetSelectedLine(Input.MouseWorld);
 
-								if (selectedLine == HitboxLine.None)
+								if (selectedLine == HitboxLine.None && isThisObjectHovered)
 								{
-									EditorApplication.SetDragAction(new MoveAnimationObjectPositionAction(hitboxEntity.Position));
+									EditorApplication.SetDragAction(new MoveAnimationObjectPositionAction([hitboxObject.Position]));
 								}
 								else
 								{
-									EditorApplication.SetDragAction(new HitboxMoveSizeDragAction(selectedLine, hitboxEntity));
+									EditorApplication.SetDragAction(new HitboxMoveSizeDragAction(selectedLine, hitboxObject));
+									isThisObjectHovered = true;
 								}
 
 								break;
 							}
+							case TextureAnimationObject textureObject:
+								if (isThisObjectHovered)
+									EditorApplication.SetDragAction(new MoveAnimationObjectPositionAction([textureObject.Position]));
+
+								break;
 						}
 					}
 
-					selectedObjectOrActionsWasHovered = EntityActions.DoGraphicEntityActions(EditorApplication.selectedData) || selectedObjectBeingHovered;
+					// check if the current object is selected!!
+
+					selectedObjectOrActionsWasHovered = EntityActions.DoGraphicEntityActions(EditorApplication.selectedData) || isThisObjectHovered;
+				}
+				else
+				{
+					foreach (SelectedObject obj in EditorApplication.selectedData)
+					{
+						bool isThisObjectHovered = obj.AnimationObject.IsBeingHovered(Input.MouseWorld, EditorApplication.State.Animator.CurrentKeyframe);
+						selectedObjectOrActionsWasHovered |= isThisObjectHovered;
+					}
+
+					if (ImGui.IsMouseClicked(ImGuiMouseButton.Left) && selectedObjectOrActionsWasHovered)
+					{
+						switch (EditorApplication.selectedData.Type)
+						{
+							case SelectionType.Graphic:
+								EditorApplication.SetDragAction(new MoveAnimationObjectPositionAction(EditorApplication.selectedData.Select(v => ((TextureAnimationObject)v.AnimationObject).Position).ToArray()));
+
+								break;
+							case SelectionType.Hitbox:
+								EditorApplication.SetDragAction(new MoveAnimationObjectPositionAction(EditorApplication.selectedData.Select(v => ((HitboxAnimationObject)v.AnimationObject).Position).ToArray()));
+
+								break;
+						}
+					}
 				}
 			}
 
@@ -86,27 +114,25 @@ namespace Editor.Gui
 							continue;
 
 						if (canSelectNewObject)
-							EditorApplication.selectedData = new SelectionData(entity);
+							EditorApplication.selectedData.SetOrAdd(entity);
 
 						break;
 					}
 				}
 				else
 				{
-					bool foundHoveredEntity = false;
-
 					foreach (TextureAnimationObject entity in EditorApplication.State.Animator.RegisteredGraphics.OrderByDescending(v => v.ZIndex.CachedValue))
 					{
 						if (!entity.IsBeingHovered(Input.MouseWorld, EditorApplication.State.Animator.CurrentKeyframe))
 							continue;
 
-						if (canSelectNewObject)
-							EditorApplication.selectedData = new SelectionData(entity);
-
 						if (!selectedObjectIsBeingDragged && !selectedObjectOrActionsWasHovered)
 						{
 							EditorApplication.hoveredEntityName = entity.Name;
 						}
+
+						if (canSelectNewObject)
+							EditorApplication.selectedData.SetOrAdd(entity);
 
 						break;
 					}

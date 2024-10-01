@@ -1,7 +1,4 @@
-﻿using Editor.Gui;
-
-using System.Collections.Generic;
-using System.Numerics;
+﻿using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
 namespace Editor.Model
@@ -45,15 +42,16 @@ namespace Editor.Model
 		public FloatKeyframeValue Transparency { get; set; }
 		public FloatKeyframeValue ZIndex { get; set; }
 
-		public bool IsBeingHovered(Vector2 mouseWorld, int frame)
+		public bool IsBeingHovered(Vector2 mouseWorld, int? frame)
 		{
+			frame ??= EditorApplication.State.Animator.CurrentKeyframe;
 			TextureFrame texture = EditorApplication.State.GetTexture(TextureName);
-			Vector2 scale = Scale.Interpolate(frame);
+			Vector2 scale = Scale.Interpolate(frame.Value);
 			Vector2 size = texture.FrameSize.ToVector2() * Vec2Abs(scale);
 
-			float rotation = Rotation.Interpolate(frame);
+			float rotation = Rotation.Interpolate(frame.Value);
 
-			return IsPointInsideRotatedRectangle(Position.Interpolate(frame), size, rotation, -texture.Pivot * ImGuiEx.Vec2Abs(scale) , mouseWorld);
+			return IsPointInsideRotatedRectangle(Position.Interpolate(frame.Value), size, rotation, -texture.Pivot * Vec2Abs(scale), mouseWorld);
 		}
 
 		public List<KeyframeableValue> EnumerateKeyframeableValues() => [Position, Scale, Rotation, FrameIndex, Transparency, ZIndex];

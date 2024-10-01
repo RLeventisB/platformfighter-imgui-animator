@@ -1,147 +1,130 @@
-﻿using Editor.Gui;
-using Editor.Model;
+﻿using Editor.Model;
 
 using ImGuiNET;
 
-using System.Runtime.CompilerServices;
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace Editor
 {
-	public record SelectionData
+	public record SelectionData : IEnumerable<SelectedObject>
 	{
-		public SelectionData()
+		private readonly List<SelectedObject> _selectedObjects = new List<SelectedObject>();
+		public SelectionType Type = SelectionType.None;
+
+		public void AddToSelection(IAnimationObject obj)
+		{
+			SelectionType typeOfObject = GetTypeOfObject(obj);
+
+			if (typeOfObject != Type)
+			{
+				Empty();
+				Type = typeOfObject;
+			}
+
+			_selectedObjects.Add(new SelectedObject(obj));
+		}
+
+		public void Set(IAnimationObject obj)
 		{
 			Empty();
+			Type = GetTypeOfObject(obj);
+			_selectedObjects.Add(new SelectedObject(obj));
 		}
 
-		public SelectionData(IAnimationObject animationObject) : this(animationObject.Name, animationObject)
+		public bool IsOnlyThis(IAnimationObject obj)
 		{
-			Hierarchy.PivotViewerZoom = 1;
-			Hierarchy.PivotViewerOffset = Vector2.Zero;
-			ResetSavedInput();
+			return IsLone() && GetLoneData().IsOf(obj);
 		}
 
-		public SelectionData(TextureFrame frame) : this(frame.Name, frame)
+		public bool SetOrAdd(IAnimationObject obj)
 		{
+			if (ImGui.IsKeyDown(ImGuiKey.ModCtrl))
+			{
+				AddToSelection(obj);
+
+				return true;
+			}
+
+			Set(obj);
+
+			return false;
 		}
 
-		public SelectionData(string name, IAnimationObject reference)
+		public bool IsLone()
 		{
-			Name = name;
-			Reference = reference;
-			ObjectSelectionType = reference switch
+			return _selectedObjects.Count == 1;
+		}
+
+		public SelectedObject GetLoneData()
+		{
+			return _selectedObjects[0];
+		}
+
+		public IAnimationObject GetLoneObject()
+		{
+			return _selectedObjects[0].AnimationObject;
+		}
+
+		public int Count => _selectedObjects.Count;
+
+		public bool Deselect(IAnimationObject obj)
+		{
+			int index = _selectedObjects.FindIndex(v => v.IsOf(obj));
+
+			if (index < 0 || index >= _selectedObjects.Count)
+				return false;
+
+			_selectedObjects.RemoveAt(index);
+			if (_selectedObjects.Count == 0)
+				Type = SelectionType.None;
+
+			return true;
+		}
+
+		public bool Contains(IAnimationObject obj)
+		{
+			return _selectedObjects.Any(v => v.IsOf(obj));
+		}
+
+		public void Empty()
+		{
+			Type = SelectionType.None;
+			_selectedObjects.Clear();
+		}
+
+		public bool IsEmpty()
+		{
+			return _selectedObjects.Count == 0;
+		}
+
+		public IEnumerator<SelectedObject> GetEnumerator() => _selectedObjects.GetEnumerator();
+
+		IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+		public static SelectionType GetTypeOfObject(IAnimationObject animationObject)
+		{
+			return animationObject switch
 			{
 				TextureAnimationObject => SelectionType.Graphic,
 				TextureFrame => SelectionType.Texture,
 				_ => SelectionType.Hitbox
 			};
 		}
-
-		public string Name { get; private set; }
-		public IAnimationObject Reference { get; private set; }
-		public SelectionType ObjectSelectionType { get; private set; }
-
-		public void Deconstruct(out string name, out IAnimationObject reference)
+	}
+	public record SelectedObject(string Name, IAnimationObject AnimationObject)
+	{
+		public SelectedObject(IAnimationObject animationObject) : this(animationObject.Name, animationObject)
 		{
-			name = Name;
-			reference = Reference;
 		}
 
-		public bool IsOf(IAnimationObject obj)
+		public bool IsOf(IAnimationObject animationObject)
 		{
-			return obj == Reference;
-		}
-
-		public void Empty()
-		{
-			Name = string.Empty;
-			Reference = null;
-			ObjectSelectionType = SelectionType.None;
-		}
-
-		public bool IsNotButSameType(TextureAnimationObject animationObject)
-		{
-			return ObjectSelectionType == SelectionType.Graphic && animationObject.Name != Name;
-		}
-
-		public bool IsNotButSameType(HitboxAnimationObject animationObject)
-		{
-			return ObjectSelectionType == SelectionType.Hitbox && animationObject.Name != Name;
-		}
-
-		public bool IsNotButSameType(TextureFrame entity)
-		{
-			return ObjectSelectionType == SelectionType.Texture && entity.Name != Name;
-		}
-
-		public bool GetValue(out IAnimationObject obj)
-		{
-			if (!string.IsNullOrEmpty(Name))
-				switch (ObjectSelectionType)
-				{
-					case SelectionType.Graphic:
-						bool exists = EditorApplication.State.GraphicEntities.TryGetValue(Name, out TextureAnimationObject textureEntity);
-						obj = exists ? textureEntity : null;
-
-						return exists;
-					case SelectionType.Hitbox:
-						exists = EditorApplication.State.HitboxEntities.TryGetValue(Name, out HitboxAnimationObject hitboxEntity);
-						obj = exists ? hitboxEntity : null;
-
-						return exists;
-					case SelectionType.Texture:
-						exists = EditorApplication.State.Textures.TryGetValue(Name, out TextureFrame textureFrame);
-						obj = exists ? textureFrame : null;
-
-						return exists;
-				}
-
-			obj = null;
-
-			return false;
-		}
-
-		public bool TryGetValue<T>(out T animationObject) where T : class, IAnimationObject
-		{
-			if (!string.IsNullOrEmpty(Name) && Reference is not null)
-				switch (ObjectSelectionType)
-				{
-					case SelectionType.Graphic:
-						bool exists = EditorApplication.State.GraphicEntities.TryGetValue(Name, out TextureAnimationObject textureEntity);
-						animationObject = exists ? Unsafe.As<T>(textureEntity) : null;
-
-						if (!exists)
-							Empty();
-
-						return exists && typeof(T) == typeof(TextureAnimationObject);
-					case SelectionType.Hitbox:
-						exists = EditorApplication.State.HitboxEntities.TryGetValue(Name, out HitboxAnimationObject hitboxEntity);
-						animationObject = exists ? Unsafe.As<T>(hitboxEntity) : null;
-
-						if (!exists)
-							Empty();
-
-						return exists && typeof(T) == typeof(HitboxAnimationObject);
-					case SelectionType.Texture:
-						exists = EditorApplication.State.Textures.TryGetValue(Name, out TextureFrame textureFrame);
-						animationObject = exists ? Unsafe.As<T>(textureFrame) : null;
-
-						if (!exists)
-							Empty();
-
-						return exists && typeof(T) == typeof(TextureFrame);
-				}
-
-			animationObject = null;
-
-			return false;
-		}
-
-		public bool IsEmpty()
-		{
-			return string.IsNullOrEmpty(Name) || Reference is null;
+			return ReferenceEquals(animationObject, AnimationObject);
 		}
 	}
+
 	public enum SelectionType
 	{
 		Texture, Graphic, Hitbox, None

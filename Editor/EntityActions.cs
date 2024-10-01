@@ -13,9 +13,10 @@ namespace Editor
 	{
 		public static bool DoGraphicEntityActions(SelectionData data)
 		{
-			if (!data.TryGetValue(out TextureAnimationObject entity))
+			if (data.Type != SelectionType.Graphic || !data.IsLone())
 				return false;
 
+			TextureAnimationObject entity = (TextureAnimationObject)data.GetLoneObject();
 			Vector2 arrowMovement = Vector2.Zero;
 
 			if (ImGui.IsWindowFocused())

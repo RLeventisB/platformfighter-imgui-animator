@@ -6,7 +6,7 @@ namespace Editor.Model
 	{
 		public string Name { get; set; }
 
-		public bool IsBeingHovered(Vector2 mouseWorld, int frame);
+		public bool IsBeingHovered(Vector2 mouseWorld, int? frame);
 
 		public List<KeyframeableValue> EnumerateKeyframeableValues();
 	}
