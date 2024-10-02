@@ -19,7 +19,7 @@ namespace Editor.Model
 		private int _frame;
 		private object _value;
 		[JsonInclude]
-		public KeyframeLink ContainingLink;
+		private KeyframeLink _containingLink;
 
 		[JsonConstructor]
 		public Keyframe()
@@ -51,6 +51,18 @@ namespace Editor.Model
 				_value = value;
 				ContainingValue?.InvalidateCachedValue();
 			}
+		}
+		public KeyframeLink ContainingLink
+		{
+			get
+			{
+				if (_containingLink is not null && _containingLink.Count <= 1)
+				{
+					ContainingValue.RemoveLink(_containingLink);
+				}
+				return _containingLink;
+			}
+			set => _containingLink = value;
 		}
 
 		public int CompareTo(Keyframe other) => Frame.CompareTo(other.Frame);

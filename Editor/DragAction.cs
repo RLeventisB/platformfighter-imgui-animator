@@ -1,4 +1,5 @@
-﻿using Editor.Gui;
+﻿using Editor.Graphics;
+using Editor.Gui;
 using Editor.Model;
 
 using ImGuiNET;
@@ -97,7 +98,7 @@ namespace Editor
 		public Vector2 accumulatedDifference;
 		public bool affectAllKeyframes;
 
-		public MoveAnimationObjectPositionAction(Vector2KeyframeValue[] positionValue) : base("MoveAnimObjectPosition", 3f, true)
+		public MoveAnimationObjectPositionAction(Vector2KeyframeValue[] positionValue) : base("MoveAnimObjectPosition", 1f / Camera.Zoom, true)
 		{
 			Values = positionValue.Select(v => (v, v.CachedValue)).ToArray();
 			affectAllKeyframes = ImGui.IsKeyDown(ImGuiKey.ModShift) && positionValue.Length == 1;
@@ -219,7 +220,7 @@ namespace Editor
 			OnCancelAction = onCancelAction;
 		}
 
-		public override void OnMoveDrag(Vector2 worldDifference, Vector2 screenDifference)
+		public override void OnMoveDrag(Vector2 screenDifference, Vector2 worldDifference)
 		{
 			OnMoveAction?.Invoke(worldDifference, screenDifference);
 		}
@@ -267,7 +268,7 @@ namespace Editor
 
 			if (!HasStartedMoving && Vector2.DistanceSquared(cursorPos, StartPos) >= DistanceToStartMoving) // waiting for big movement
 			{
-				OnMoveDrag(cursorPos - StartPos, worldCursorPos - StartPosWorld);
+				OnMoveDrag(worldCursorPos - StartPosWorld, cursorPos - StartPos);
 				HasStartedMoving = true;
 			}
 			else if (HasStartedMoving) // has started moving

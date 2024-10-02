@@ -144,8 +144,7 @@ namespace Editor.Model
 		[JsonInclude]
 		public List<string> tags;
 		[JsonIgnore]
-		protected (object value, int frame) cachedValue;
-
+		public (object value, int frame) cachedValue;
 		public IAnimationObject Owner { get; init; }
 		public string Name { get; init; }
 

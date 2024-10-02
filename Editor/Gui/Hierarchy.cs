@@ -276,32 +276,37 @@ namespace Editor.Gui
 
 					if (ImGui.Button("Enlazar todos los fotogramas vacios"))
 					{
-						foreach (TextureAnimationObject textureobject in EditorApplication.State.Animator.RegisteredGraphics)
+						if (Timeline.HitboxMode)
 						{
-							foreach (KeyframeableValue value in textureobject.EnumerateKeyframeableValues())
+							foreach (HitboxAnimationObject hitboxObject in EditorApplication.State.Animator.RegisteredHitboxes)
 							{
-								IEnumerable<Keyframe> loneKeyframes = value.keyframes.Where(v => v.ContainingLink is null);
-
-								if (loneKeyframes.Count() > 1)
+								foreach (KeyframeableValue value in hitboxObject.EnumerateKeyframeableValues())
 								{
-									value.AddLink(new KeyframeLink(value, loneKeyframes));
+									IEnumerable<Keyframe> loneKeyframes = value.keyframes.Where(v => v.ContainingLink is null);
 
-									value.CacheValue(null);
+									if (loneKeyframes.Count() > 1)
+									{
+										value.AddLink(new KeyframeLink(value, loneKeyframes));
+
+										value.CacheValue(null);
+									}
 								}
 							}
 						}
-
-						foreach (HitboxAnimationObject hitboxObject in EditorApplication.State.Animator.RegisteredHitboxes)
+						else
 						{
-							foreach (KeyframeableValue value in hitboxObject.EnumerateKeyframeableValues())
+							foreach (TextureAnimationObject textureobject in EditorApplication.State.Animator.RegisteredGraphics)
 							{
-								IEnumerable<Keyframe> loneKeyframes = value.keyframes.Where(v => v.ContainingLink is null);
-
-								if (loneKeyframes.Count() > 1)
+								foreach (KeyframeableValue value in textureobject.EnumerateKeyframeableValues())
 								{
-									value.AddLink(new KeyframeLink(value, loneKeyframes));
+									IEnumerable<Keyframe> loneKeyframes = value.keyframes.Where(v => v.ContainingLink is null);
 
-									value.CacheValue(null);
+									if (loneKeyframes.Count() > 1)
+									{
+										value.AddLink(new KeyframeLink(value, loneKeyframes));
+
+										value.CacheValue(null);
+									}
 								}
 							}
 						}
@@ -823,6 +828,11 @@ namespace Editor.Gui
 					{
 						ImGui.PushID(keyframeButtonId++);
 
+						if (ImGui.Button($"{IcoMoon.KeyIcon}"))
+						{
+							keyframeableValue.SetKeyframeValue(null, keyframeableValue.cachedValue.value);
+						}
+						
 						ImGui.PopID();
 
 						ImGui.NextColumn();

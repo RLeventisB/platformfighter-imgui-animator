@@ -48,9 +48,12 @@ namespace Editor.Gui
 							{
 								HitboxLine selectedLine = hitboxObject.GetSelectedLine(Input.MouseWorld);
 
-								if (selectedLine == HitboxLine.None && isThisObjectHovered)
+								if (selectedLine == HitboxLine.None)
 								{
-									EditorApplication.SetDragAction(new MoveAnimationObjectPositionAction([hitboxObject.Position]));
+									if (isThisObjectHovered)
+									{
+										EditorApplication.SetDragAction(new MoveAnimationObjectPositionAction([hitboxObject.Position]));
+									}
 								}
 								else
 								{
@@ -110,7 +113,7 @@ namespace Editor.Gui
 				{
 					foreach (HitboxAnimationObject entity in EditorApplication.State.Animator.RegisteredHitboxes)
 					{
-						if (!entity.IsBeingHovered(Input.MouseWorld, EditorApplication.State.Animator.CurrentKeyframe))
+						if (!entity.IsBeingHovered(Input.MouseWorld, null))
 							continue;
 
 						if (canSelectNewObject)
@@ -123,7 +126,7 @@ namespace Editor.Gui
 				{
 					foreach (TextureAnimationObject entity in EditorApplication.State.Animator.RegisteredGraphics.OrderByDescending(v => v.ZIndex.CachedValue))
 					{
-						if (!entity.IsBeingHovered(Input.MouseWorld, EditorApplication.State.Animator.CurrentKeyframe))
+						if (!entity.IsBeingHovered(Input.MouseWorld, null))
 							continue;
 
 						if (!selectedObjectIsBeingDragged && !selectedObjectOrActionsWasHovered)
