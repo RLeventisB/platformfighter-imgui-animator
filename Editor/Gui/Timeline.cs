@@ -99,6 +99,7 @@ namespace Editor.Gui
 		public static CreationLinkData newLinkCreationData;
 		private static Keyframe keyframeToClone;
 		private static bool cloneKeyframePopupOpen;
+		private static KeyframeLink modifyLinkObject;
 
 		public static void DrawUiTimeline(Animator animator)
 		{
@@ -170,13 +171,55 @@ namespace Editor.Gui
 					ImGui.EndChild();
 				}
 
+				if (modifyLinkObject is not null)
+				{
+					if (!ImGui.IsPopupOpen("Modificar enlace"))
+					{
+						ImGui.OpenPopup("Modificar enlace");
+					}
+
+					if (ImGui.BeginPopupModal("Modificar enlace", ImGuiWindowFlags.AlwaysAutoResize))
+					{
+						string[] names = Enum.GetNames<InterpolationType>();
+
+						int currentType = (int)modifyLinkObject.InterpolationType;
+
+						if (ImGui.Combo("Tipo de interpolacion", ref currentType, names, names.Length))
+						{
+							modifyLinkObject.InterpolationType = (InterpolationType)currentType;
+						}
+
+						ImGui.Text("Frames contenidos");
+
+						ImGui.Indent();
+
+						// todo: editor de frames del link
+
+						ImGui.Unindent();
+						ImGui.SetNextItemShortcut(ImGuiKey.Escape);
+
+						if (ImGui.Button("Cerrar"))
+						{
+							ImGui.CloseCurrentPopup();
+							modifyLinkObject = null;
+						}
+
+						ImGui.EndPopup();
+					}
+					else
+					{
+						modifyLinkObject = null;
+					}
+				}
+
 				ImGui.EndChild();
 			}
 		}
 
-		private static void RenderSelectedHitboxData(HitboxAnimationObject selectedAnimationObject, Animator animator, float endingFrame, float headerHeightOrsmting, float oldTimelineZoomTarget)
+		public static void OpenLinkPopup(KeyframeLink link)
 		{
-			ImGui.Text("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+			modifyLinkObject = link;
+			ImGui.OpenPopup("Modificar enlace");
 		}
 
 		private static void RenderSelectedEntityKeyframes(IAnimationObject selectedAnimationObject, Animator animator, float endingFrame, float headerHeightOrsmting, float oldTimelineZoomTarget)
@@ -251,6 +294,11 @@ namespace Editor.Gui
 							if (clickedLeft)
 							{
 								EditorApplication.SelectLink(link);
+							}
+
+							if (ImGui.IsMouseClicked(ImGuiMouseButton.Right))
+							{
+								OpenLinkPopup(link);
 							}
 
 							linkTooltip = $"Link {{{string.Join(", ", link.Keyframes.Select(v => v.ToString()))}}}\n({link.InterpolationType})";

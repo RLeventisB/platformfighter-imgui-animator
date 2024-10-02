@@ -747,7 +747,6 @@ namespace Editor.Gui
 			switch (EditorApplication.selectedData.Type)
 			{
 				case SelectionType.Graphic:
-				{
 					TextureAnimationObject textureObject = (TextureAnimationObject)EditorApplication.selectedData.GetLoneObject();
 
 					string tempEntityName = SavedInput(string.Empty, textureObject.Name, out _);
@@ -832,7 +831,7 @@ namespace Editor.Gui
 						{
 							keyframeableValue.SetKeyframeValue(null, keyframeableValue.cachedValue.value);
 						}
-						
+
 						ImGui.PopID();
 
 						ImGui.NextColumn();
@@ -888,21 +887,50 @@ namespace Editor.Gui
 					}
 
 					break;
-				}
 				case SelectionType.Hitbox:
-					ImGui.PushItemWidth(WindowWidth * 0.35f);
 					HitboxAnimationObject hitboxObject = (HitboxAnimationObject)EditorApplication.selectedData.GetLoneObject();
 
-					NVector2 newValue = hitboxObject.Position.CachedValue.ToNumerics();
+					ImGui.Columns(2);
+					ImGui.SetColumnWidth(0, 28);
 
-					if (ImGui.DragFloat2("Position", ref newValue))
-						hitboxObject.Position.SetKeyframeValue(null, (Vector2)newValue);
+					ImGui.NextColumn();
+					ImGui.Text("All properties");
+					ImGui.Separator();
+					ImGui.NextColumn();
 
-					newValue = hitboxObject.Size.CachedValue.ToNumerics();
+					keyframeButtonId = 0;
 
-					if (ImGui.DragFloat2("Size", ref newValue))
-						hitboxObject.Size.SetKeyframeValue(null, (Vector2)newValue);
+					foreach (KeyframeableValue keyframeableValue in hitboxObject.EnumerateKeyframeableValues())
+					{
+						ImGui.PushID(keyframeButtonId++);
 
+						if (ImGui.Button($"{IcoMoon.KeyIcon}"))
+						{
+							keyframeableValue.SetKeyframeValue(null, keyframeableValue.cachedValue.value);
+						}
+
+						ImGui.PopID();
+
+						ImGui.NextColumn();
+
+						switch (keyframeableValue.Name)
+						{
+							case SizeProperty:
+							case PositionProperty:
+								NVector2 vector2 = ((Vector2KeyframeValue)keyframeableValue).CachedValue.ToNumerics();
+
+								if (ImGui.DragFloat2(keyframeableValue.Name, ref vector2))
+									keyframeableValue.SetKeyframeValue(null, (Vector2)vector2);
+
+								break;
+						}
+
+						ImGui.NextColumn();
+					}
+
+					ImGui.Columns(1);
+
+					ImGui.PushItemWidth(WindowWidth * 0.35f);
 					DragUshort("Frame start", ref hitboxObject.SpawnFrame);
 					DragUshort("Frame duration", ref hitboxObject.FrameDuration);
 
@@ -912,7 +940,7 @@ namespace Editor.Gui
 
 					int index = (int)hitboxObject.Type;
 
-					if (ImGui.ListBox("Hitbox type", ref index, names, names.Length))
+					if (ImGui.Combo("Hitbox type", ref index, names, names.Length))
 					{
 						hitboxObject.Type = (HitboxType)index;
 					}
@@ -931,7 +959,7 @@ namespace Editor.Gui
 
 					index = (int)hitboxObject.LaunchType;
 
-					if (ImGui.ListBox("Launch type", ref index, names, names.Length))
+					if (ImGui.Combo("Launch type", ref index, names, names.Length))
 					{
 						hitboxObject.LaunchType = (LaunchType)index;
 					}
