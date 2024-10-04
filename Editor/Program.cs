@@ -18,98 +18,102 @@ namespace game
 		{
 			if (true)
 			{
-				JsonData data = JsonSerializer.Deserialize<JsonData>(File.ReadAllBytes(@"D:\Otras cosas\proyectos codigo\platformfighter-imgui-animator\Editor\bin\Debug\net8.0\projects\terminados\elmojump.anim"), SettingsManager.DefaultSerializerOptions);
-				List<Keyframe> keyframesToResolve = new List<Keyframe>(); // since json loads objects as JsonElements :(
-				List<TextureAnimationObject> graphicEntities = new List<TextureAnimationObject>();
-				List<TextureAnimationObjectAlt> parsedGraphicEntities = new List<TextureAnimationObjectAlt>();
-				List<HitboxAnimationObject> hitboxEntities = new List<HitboxAnimationObject>();
-				List<HitboxAnimationObjectAlt> parsedHitboxEntities = new List<HitboxAnimationObjectAlt>();
-
-				foreach (TextureAnimationObject graphicObject in data.graphicObjects)
+				Directory.CreateDirectory("./parsed");
+				foreach (string filePath in Directory.GetFiles(@"D:\Otras cosas\proyectos codigo\platformfighter-imgui-animator\Editor\bin\Debug\net8.0\projects\terminados", "*.anim"))
 				{
-					graphicEntities.Add(graphicObject);
+					JsonData data = JsonSerializer.Deserialize<JsonData>(File.ReadAllBytes(filePath), SettingsManager.DefaultSerializerOptions);
+					List<Keyframe> keyframesToResolve = new List<Keyframe>(); // since json loads objects as JsonElements :(
+					List<TextureAnimationObject> graphicEntities = new List<TextureAnimationObject>();
+					List<TextureAnimationObjectAlt> parsedGraphicEntities = new List<TextureAnimationObjectAlt>();
+					List<HitboxAnimationObject> hitboxEntities = new List<HitboxAnimationObject>();
+					List<HitboxAnimationObjectAlt> parsedHitboxEntities = new List<HitboxAnimationObjectAlt>();
 
-					foreach (KeyframeableValue keyframeableValue in graphicObject.EnumerateKeyframeableValues())
+					foreach (TextureAnimationObject graphicObject in data.graphicObjects)
 					{
-						foreach (KeyframeLink link in keyframeableValue.links)
-						{
-							link.ContainingValue = keyframeableValue;
+						graphicEntities.Add(graphicObject);
 
-							foreach (Keyframe keyframe in link.Keyframes) // sometimes keyframes dont store their containing link so fixup!!
+						foreach (KeyframeableValue keyframeableValue in graphicObject.EnumerateKeyframeableValues())
+						{
+							foreach (KeyframeLink link in keyframeableValue.links)
 							{
-								keyframe.ContainingLink = link;
+								link.ContainingValue = keyframeableValue;
+
+								foreach (Keyframe keyframe in link.Keyframes) // sometimes keyframes dont store their containing link so fixup!!
+								{
+									keyframe.ContainingLink = link;
+								}
+							}
+
+							keyframesToResolve.AddRange(keyframeableValue.keyframes);
+						}
+					}
+
+					foreach (HitboxAnimationObject hitboxObject in data.hitboxObjects)
+					{
+						hitboxEntities.Add(hitboxObject);
+
+						foreach (KeyframeableValue keyframeableValue in hitboxObject.EnumerateKeyframeableValues())
+						{
+							foreach (KeyframeLink link in keyframeableValue.links)
+							{
+								link.ContainingValue = keyframeableValue;
+
+								foreach (Keyframe keyframe in link.Keyframes) // sometimes keyframes dont store their containing link so fixup!!
+								{
+									keyframe.ContainingLink = link;
+								}
+							}
+
+							keyframesToResolve.AddRange(keyframeableValue.keyframes);
+						}
+					}
+
+					foreach (Keyframe keyframe in keyframesToResolve)
+					{
+						if (keyframe.Value is not JsonElement element)
+							continue;
+
+						try
+						{
+							switch (keyframe.ContainingValue)
+							{
+								case Vector2KeyframeValue:
+									keyframe.Value = new Vector2(element.GetProperty("x").GetSingle(), element.GetProperty("y").GetSingle());
+
+									break;
+								case IntKeyframeValue:
+									keyframe.Value = element.GetInt32();
+
+									break;
+								case FloatKeyframeValue:
+									keyframe.Value = element.GetSingle();
+
+									break;
 							}
 						}
-
-						keyframesToResolve.AddRange(keyframeableValue.keyframes);
-					}
-				}
-
-				foreach (HitboxAnimationObject hitboxObject in data.hitboxObjects)
-				{
-					hitboxEntities.Add(hitboxObject);
-
-					foreach (KeyframeableValue keyframeableValue in hitboxObject.EnumerateKeyframeableValues())
-					{
-						foreach (KeyframeLink link in keyframeableValue.links)
+						catch (Exception e) // we are COOKED
 						{
-							link.ContainingValue = keyframeableValue;
-
-							foreach (Keyframe keyframe in link.Keyframes) // sometimes keyframes dont store their containing link so fixup!!
-							{
-								keyframe.ContainingLink = link;
-							}
-						}
-
-						keyframesToResolve.AddRange(keyframeableValue.keyframes);
-					}
-				}
-
-				foreach (Keyframe keyframe in keyframesToResolve)
-				{
-					if (keyframe.Value is not JsonElement element)
-						continue;
-
-					try
-					{
-						switch (keyframe.ContainingValue)
-						{
-							case Vector2KeyframeValue:
-								keyframe.Value = new Vector2(element.GetProperty("x").GetSingle(), element.GetProperty("y").GetSingle());
-
-								break;
-							case IntKeyframeValue:
-								keyframe.Value = element.GetInt32();
-
-								break;
-							case FloatKeyframeValue:
-								keyframe.Value = element.GetSingle();
-
-								break;
+							Console.WriteLine(e);
 						}
 					}
-					catch (Exception e) // we are COOKED
+
+					foreach (TextureAnimationObject entity in graphicEntities)
 					{
-						Console.WriteLine(e);
+						TextureAnimationObjectAlt objectAlt = new TextureAnimationObjectAlt();
+						objectAlt.Name = entity.Name;
+						objectAlt.TextureName = entity.TextureName;
+						objectAlt.Position = KeyframeableValueAlt.From(objectAlt, entity.Position);
+
+						parsedGraphicEntities.Add(objectAlt);
 					}
+
+					byte[] serializedBytes = JsonSerializer.SerializeToUtf8Bytes(new JsonDataAlt(data.looping, data.playingForward, data.playingBackwards, data.selectedFps, data.currentKeyframe, data.textures,
+						parsedGraphicEntities.ToArray(),
+						parsedHitboxEntities.ToArray()
+					), SettingsManager.DefaultSerializerOptions);
+
+					File.WriteAllBytes("./parsed/" + Path.GetFileName(filePath), serializedBytes);
 				}
-
-				foreach (TextureAnimationObject entity in graphicEntities)
-				{
-					TextureAnimationObjectAlt objectAlt = new TextureAnimationObjectAlt();
-					objectAlt.Name = entity.Name;
-					objectAlt.TextureName = entity.TextureName;
-					objectAlt.Position = KeyframeableValueAlt.From(objectAlt, entity.Position);
-
-					parsedGraphicEntities.Add(objectAlt);
-				}
-
-				byte[] serializedBytes = JsonSerializer.SerializeToUtf8Bytes(new JsonDataAlt(data.looping, data.playingForward, data.playingBackwards, data.selectedFps, data.currentKeyframe, data.textures,
-					parsedGraphicEntities.ToArray(),
-					parsedHitboxEntities.ToArray()
-				), SettingsManager.DefaultSerializerOptions);
-
-				File.WriteAllBytes("./parsed.anim", serializedBytes);
 			}
 			else
 			{
