@@ -10,6 +10,7 @@ using Editor.Graphics;
 using Editor.Graphics.Grid;
 using Editor.Gui;
 using Editor.Model;
+using Editor.Objects;
 
 using ImGuiNET;
 
@@ -108,6 +109,36 @@ namespace Editor
 			IsFixedTimeStep = true;
 			IsMouseVisible = true;
 			Instance = this;
+
+			ExternalActions.GetCurrentFrame = () => State.Animator.CurrentKeyframe;
+			ExternalActions.OnChangeLinkPropertyProperty = link =>
+			{
+				if (Timeline.selectedLink != null && Timeline.selectedLink.link == link)
+				{
+					Timeline.selectedLink.CalculateExtraData();
+				}
+			};
+
+			ExternalActions.OnDeleteLink = link =>
+			{
+				if (Timeline.selectedLink != null && Timeline.selectedLink.link == link)
+					Timeline.selectedLink = null;
+			};
+
+			ExternalActions.AreKeyframesSetOnModify = () => SettingsManager.SetKeyframeOnModify;
+			ExternalActions.GetGraphicsDevice = () => GraphicsDevice;
+			ExternalActions.GetTextureFrameByName = name => State.Textures[name];
+			ExternalActions.GetTextureAnimationObjectByName = name => State.GraphicEntities[name];
+			ExternalActions.GetHitboxAnimationObjectByName = name => State.HitboxEntities[name];
+			ExternalActions.CalculateQuadPoints = GetQuadsPrimitive;
+			ExternalActions.OnRemoveTexture = texture =>
+			{
+				State.Textures.Remove(texture.Name);
+				selectedData.Deselect(texture);
+			};
+
+			ExternalActions.GetCameraZoom = () => Camera.Zoom;
+			ExternalActions.IsHitboxModeActive = () => Timeline.HitboxMode;
 		}
 
 		public static TextureFrame SinglePixel { get; private set; }
@@ -166,6 +197,12 @@ namespace Editor
 		{
 			Texture2D singlePixelTexture = new Texture2D(GraphicsDevice, 1, 1);
 			ImguiRenderer = new ImGuiRenderer(this);
+
+			ExternalActions.BindTexture = ImguiRenderer.BindTexture;
+			ExternalActions.GetTexture = ImguiRenderer.GetTexture;
+			ExternalActions.UnbindTexture = ImguiRenderer.UnbindTexture;
+			ExternalActions.GetTextureDictionaryForRawUse = () => ImguiRenderer.loadedTextures;
+
 			SinglePixel = new TextureFrame("SinglePixel", singlePixelTexture, new Point(1), null, NVector2.One / 2);
 			IcoMoon.AddIconsToDefaultFont(14f);
 			ImguiRenderer.RebuildFontAtlas();
@@ -464,7 +501,7 @@ namespace Editor
 		{
 			switch (Timeline.selectedLink.propertyName)
 			{
-				case PositionProperty when SettingsManager.ShowPositionLinks: // draw all keyframe
+				case PropertyNames.PositionProperty when SettingsManager.ShowPositionLinks: // draw all keyframe
 					unsafe
 					{
 						Vector2[] linkPreview = (Vector2[])Timeline.selectedLink.extraData;
@@ -478,7 +515,7 @@ namespace Editor
 					foreach (Keyframe keyframe in Timeline.selectedLink.link.Keyframes)
 					{
 						Vector2 position = Camera.WorldToScreen((Vector2)keyframe.Value);
-						bool hover = IsInsideRectangle(position, new Vector2(10), MathHelper.PiOver4, ImGui.GetMousePos());
+						bool hover = MiscellaneousFunctions.IsInsideRectangle(position, new Vector2(10), MathHelper.PiOver4, ImGui.GetMousePos());
 						drawList.AddNgon(new NVector2(position.X, position.Y), 10, hover ? 0xCCCCCCCC : 0x77777777, 4);
 
 						if (hover && ImGui.IsMouseClicked(ImGuiMouseButton.Left) && currentDragAction is null)
@@ -496,7 +533,7 @@ namespace Editor
 					}
 
 					break;
-				case RotationProperty when SettingsManager.ShowRotationLinks:
+				case PropertyNames.RotationProperty when SettingsManager.ShowRotationLinks:
 					for (int index = 0; index < Timeline.selectedLink.link.Keyframes.Count; index++)
 					{
 						Keyframe keyframe = Timeline.selectedLink.link.Keyframes[index];
@@ -507,15 +544,6 @@ namespace Editor
 
 					break;
 			}
-		}
-
-		private void RenderRotationIcon(ImDrawListPtr drawList, Vector2 worldPos, float rotation)
-		{
-			Vector2 position = Camera.WorldToScreen(worldPos);
-			(float sin, float cos) = MathF.SinCos(rotation);
-
-			ImFontGlyphPtr glyph = ImGui.GetIO().Fonts.Fonts[0].FindGlyph(IcoMoon.NextArrowIcon);
-			RenderIcon(drawList, glyph, position, sin, cos);
 		}
 
 		private unsafe void RenderIcon(ImDrawListPtr drawList, ImFontGlyphPtr glyph, Vector2 position, float sin, float cos)
@@ -714,7 +742,7 @@ namespace Editor
 
 			switch (propertyName)
 			{
-				case PositionProperty:
+				case PropertyNames.PositionProperty:
 					List<Vector2> positions = new List<Vector2>();
 
 					AddDelegateOnce(ref Camera.OnDirty, CalculateExtraData);
@@ -732,7 +760,7 @@ namespace Editor
 					extraData = positions.ToArray();
 
 					break;
-				case RotationProperty:
+				case PropertyNames.RotationProperty:
 					List<float> rotations = new List<float>();
 
 					foreach (Keyframe keyframe in link.Keyframes)

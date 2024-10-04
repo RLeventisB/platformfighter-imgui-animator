@@ -3,10 +3,8 @@
 using Microsoft.Xna.Framework;
 
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
@@ -15,96 +13,7 @@ namespace Editor.Gui
 {
 	public static partial class ImGuiEx
 	{
-		public const string ScaleProperty = "Scale";
-		public const string FrameIndexProperty = "Frame Index";
-		public const string RotationProperty = "Rotation";
-		public const string TransparencyProperty = "Transparency";
-		public const string PositionProperty = "Position";
-		public const string ZIndexProperty = "ZIndex";
-		public const string SizeProperty = "Size";
 		private static string savingInputString;
-
-		public static Vector3 AsVector3(this NVector2 vector2) => new Vector3(vector2.X, vector2.Y, 0);
-
-		public static bool IsInsideRectangle(Vector2 position, Vector2 size, float rotation, Vector2 point)
-		{
-			// Translate point to local coordinates of the rectangle
-			double localX = point.X - position.X;
-			double localY = point.Y - position.Y;
-
-			// Rotate point around the rectangle center by the negative of the rectangle angle
-			(double sinAngle, double cosAngle) = Math.SinCos(-rotation);
-
-			double rotatedX = localX * cosAngle - localY * sinAngle;
-			double rotatedY = localX * sinAngle + localY * cosAngle;
-
-			// Check if the rotated point is inside the unrotated rectangle
-			double halfWidth = size.X / 2;
-			double halfHeight = size.Y / 2;
-
-			return Math.Abs(rotatedX) <= halfWidth && Math.Abs(rotatedY) <= halfHeight;
-		}
-
-		public static bool IsPointInsideRotatedRectangle(Vector2 center, Vector2 size, float rotation, Vector2 pivot, Vector2 point)
-		{
-			// ew chatgpt again (i am running out of time)
-			(float sin, float cos) = MathF.SinCos(rotation);
-			EditorApplication.GetQuadsPrimitive(center.X, center.Y, pivot.X, pivot.Y, size.X, size.Y, sin, cos,
-				out float tlX, out float tlY,
-				out float trX, out float trY,
-				out float blX, out float blY,
-				out float brX, out float brY
-			);
-
-			Vector2[] corners = { new Vector2(tlX, tlY), new Vector2(trX, trY), new Vector2(brX, brY), new Vector2(blX, blY) };
-
-			return WindingNumber(point, corners) != 0;
-		}
-
-		private static int WindingNumber(Vector2 point, Vector2[] corners)
-		{
-			int wn = 0;
-
-			for (int i = 0; i < corners.Length; i++)
-			{
-				Vector2 c1 = corners[i];
-				Vector2 c2 = corners[(i + 1) % corners.Length];
-
-				if (c1.Y <= point.Y)
-				{
-					if (c2.Y > point.Y && IsLeft(c1.X, c1.Y, c2.X, c2.Y, point.X, point.Y) > 0)
-						wn++;
-				}
-				else
-				{
-					if (c2.Y <= point.Y && IsLeft(c1.X, c1.Y, c2.X, c2.Y, point.X, point.Y) < 0)
-						wn--;
-				}
-			}
-
-			return wn;
-		}
-
-		private static float IsLeft(float x1, float y1, float x2, float y2, float px, float py)
-		{
-			return (x2 - x1) * (py - y1) - (y2 - y1) * (px - x1);
-		}
-
-		public static unsafe object CloneWithoutReferences(this object obj)
-		{
-			Type underlyingType = obj.GetType();
-			object clone = Activator.CreateInstance(underlyingType);
-
-			// fixed (void* ptrClone = &clone)
-			{
-				// fixed (void* destinationClone = &obj)
-				{
-					Unsafe.CopyBlock(&clone, &obj, (uint)Marshal.SizeOf(underlyingType));
-				}
-			}
-
-			return clone;
-		}
 
 		public static bool DragUshort(string name, ref ushort value, float speed = 1)
 		{
@@ -128,7 +37,7 @@ namespace Editor.Gui
 		{
 			ImDrawListPtr drawList = ImGui.GetWindowDrawList();
 			float height = 35;
-			
+
 			// ImGui.SetCursorScreenPos(new NVector2(cursorPos.X, cursorPos.Y));
 
 			NVector2 cursorPos = ImGui.GetCursorScreenPos();
@@ -140,7 +49,7 @@ namespace Editor.Gui
 			{
 				EditorApplication.SetDragAction(new ChangeHitboxAngleAction(center, angle, setAngle));
 			}
-			
+
 			ImGui.SameLine();
 
 			bool changed = ImGui.DragFloat(name, ref angle, speed);
@@ -181,75 +90,6 @@ namespace Editor.Gui
 
 					return v;
 			}
-		}
-
-		public static bool IsInsideRectangle(Vector2 position, Vector2 size, Vector2 point)
-		{
-			return Math.Abs(point.X - position.X) <= size.X / 2 && Math.Abs(point.Y - position.Y) <= size.Y / 2;
-		}
-
-		public static Color MultiplyAlpha(this Color color, float multiplier)
-		{
-			color.A = (byte)MathHelper.Clamp(color.A * multiplier, byte.MinValue, byte.MaxValue);
-
-			return color;
-		}
-
-		public static Color MultiplyRGB(this Color color, float multiplier)
-		{
-			color.R = (byte)MathHelper.Clamp(color.R * multiplier, byte.MinValue, byte.MaxValue);
-			color.G = (byte)MathHelper.Clamp(color.G * multiplier, byte.MinValue, byte.MaxValue);
-			color.B = (byte)MathHelper.Clamp(color.B * multiplier, byte.MinValue, byte.MaxValue);
-
-			return color;
-		}
-
-		public static int InterpolateCatmullRom(int[] values, float progress)
-		{
-			if (values.Length < 2)
-				throw new ArgumentException("At least two points are required for interpolation.");
-
-			List<int> valuesList = new List<int>();
-			valuesList.Add(2 * values[0] - values[1]);
-			valuesList.AddRange(values);
-			valuesList.Add(2 * values[^1] - values[^2]);
-
-			int index = Math.Clamp((int)progress + 1, 1, valuesList.Count - 3);
-			float localProgress = progress - index + 1;
-
-			return (int)MathHelper.CatmullRom(valuesList[index - 1], valuesList[index], valuesList[index + 1], valuesList[index + 2], localProgress);
-		}
-
-		public static float InterpolateCatmullRom(float[] values, float progress)
-		{
-			if (values.Length < 2)
-				throw new ArgumentException("At least two points are required for interpolation.");
-
-			List<float> valuesList = new List<float>();
-			valuesList.Add(2 * values[0] - values[1]);
-			valuesList.AddRange(values);
-			valuesList.Add(2 * values[^1] - values[^2]);
-
-			int index = Math.Clamp((int)progress + 1, 1, valuesList.Count - 3);
-			float localProgress = progress - index + 1;
-
-			return MathHelper.CatmullRom(valuesList[index - 1], valuesList[index], valuesList[index + 1], valuesList[index + 2], localProgress);
-		}
-
-		public static Vector2 InterpolateCatmullRom(Vector2[] points, float progress)
-		{
-			if (points.Length < 2)
-				throw new ArgumentException("At least two points are required for interpolation.");
-
-			List<Vector2> pointsList = new List<Vector2>();
-			pointsList.Add(2 * points[0] - points[1]);
-			pointsList.AddRange(points);
-			pointsList.Add(2 * points[^1] - points[^2]);
-
-			int index = Math.Clamp((int)progress, 0, points.Length - 2) + 1;
-			float localProgress = progress - index + 1;
-
-			return Vector2.CatmullRom(pointsList[index - 1], pointsList[index], pointsList[index + 1], pointsList[index + 2], localProgress);
 		}
 
 		public static float Modulas(float input, float divisor) => (input % divisor + divisor) % divisor;

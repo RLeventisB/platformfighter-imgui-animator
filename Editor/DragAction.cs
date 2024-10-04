@@ -1,6 +1,6 @@
 ﻿using Editor.Graphics;
 using Editor.Gui;
-using Editor.Model;
+using Editor.Objects;
 
 using ImGuiNET;
 

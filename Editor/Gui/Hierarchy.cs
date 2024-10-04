@@ -1,4 +1,4 @@
-﻿using Editor.Model;
+﻿using Editor.Objects;
 
 using ImGuiNET;
 
@@ -22,6 +22,7 @@ namespace Editor.Gui
 		private static NVector2 projectActionsPositionOffset;
 		private static float projectActionsKeyframeMult = 1;
 		private static IAnimationObject objectToRename;
+		private static int projectActionsKeyframeStart = -1;
 
 		public static void Draw()
 		{
@@ -207,8 +208,6 @@ namespace Editor.Gui
 
 					ImGui.InputFloat("Multiplicar tiempo global por:", ref projectActionsKeyframeMult);
 
-					ImGui.SetItemTooltip("Esto multiplica todas las variables relacionadas con el tiempo en el mundo por un valor.\nEsto incluye posicion de los fotograma claves, y las duraciones de las hitboxes.\nTener en cuenta que esto redondea valores, haciendolo \"lossy\"");
-
 					if (ImGui.Button("Multiplicar tiempo"))
 					{
 						foreach (TextureAnimationObject textureobject in EditorApplication.State.Animator.RegisteredGraphics)
@@ -243,17 +242,38 @@ namespace Editor.Gui
 						projectActionsKeyframeMult = 1;
 					}
 
-					if (ImGui.Button("Mantener solo keyframes primarios"))
+					ImGui.SetItemTooltip("Esto multiplica todas las variables relacionadas con el tiempo en el mundo por un valor.\nEsto incluye posicion de los fotograma claves, y las duraciones de las hitboxes.\nTener en cuenta que esto redondea valores, haciendolo \"lossy\"");
+
+					ImGui.InputInt("Fotograma para inicio:", ref projectActionsKeyframeStart);
+
+					if (ImGui.Button("Usar fotograma como base"))
 					{
 						foreach (TextureAnimationObject textureobject in EditorApplication.State.Animator.RegisteredGraphics)
 						{
 							foreach (KeyframeableValue value in textureobject.EnumerateKeyframeableValues())
 							{
-								value.keyframes.RemoveAll(v => value.keyframes.IndexOf(v) > 0);
-								value.links.Clear();
-								if (value.keyframes.Count > 0)
-									value.keyframes[0].ContainingLink = null;
+								object storedValue = null;
 
+								switch (value)
+								{
+									case Vector2KeyframeValue vector2KeyframeValue:
+										storedValue = vector2KeyframeValue.Interpolate(projectActionsKeyframeStart);
+
+										break;
+									case IntKeyframeValue intKeyframeValue:
+										storedValue = intKeyframeValue.Interpolate(projectActionsKeyframeStart);
+
+										break;
+									case FloatKeyframeValue floatKeyframeValue:
+										storedValue = floatKeyframeValue.Interpolate(projectActionsKeyframeStart);
+
+										break;
+								}
+
+								value.keyframes.Clear();
+								value.links.Clear();
+
+								value.Add(new Keyframe(value, 0, storedValue));
 								value.CacheValue(null);
 							}
 						}
@@ -272,7 +292,7 @@ namespace Editor.Gui
 						}
 					}
 
-					ImGui.SetItemTooltip("Borra los fotogramas que no son primarios, esto incluye los enlaces.\nSirve solo para tener la primera \"pose\"");
+					ImGui.SetItemTooltip("Borra todos los datos, menos los datos en el fotograma especificado.\nEstos datos seran utilizados como la base de la \"nueva animacion\"");
 
 					if (ImGui.Button("Enlazar todos los fotogramas vacios"))
 					{
@@ -312,7 +332,7 @@ namespace Editor.Gui
 						}
 					}
 
-					ImGui.SetItemTooltip("Añade un enlace default que incluye todos los fotogramas que no tienen algun fotograma, mientras hayan mas de 2.");
+					ImGui.SetItemTooltip("Añade un enlace predeterminado que incluye todos los fotogramas que no tienen algun fotograma, mientras hayan mas de 2.");
 
 					ImGui.EndPopup();
 				}
@@ -838,15 +858,15 @@ namespace Editor.Gui
 
 						switch (keyframeableValue.Name)
 						{
-							case ScaleProperty:
-							case PositionProperty:
+							case PropertyNames.ScaleProperty:
+							case PropertyNames.PositionProperty:
 								NVector2 vector2 = ((Vector2KeyframeValue)keyframeableValue).CachedValue.ToNumerics();
 
 								if (ImGui.DragFloat2(keyframeableValue.Name, ref vector2))
 									keyframeableValue.SetKeyframeValue(null, (Vector2)vector2);
 
 								break;
-							case FrameIndexProperty:
+							case PropertyNames.FrameIndexProperty:
 								int frameIndex = ((IntKeyframeValue)keyframeableValue).CachedValue;
 
 								TextureFrame texture = EditorApplication.State.GetTexture(textureObject.TextureName);
@@ -857,7 +877,7 @@ namespace Editor.Gui
 									keyframeableValue.SetKeyframeValue(null, frameIndex);
 
 								break;
-							case RotationProperty:
+							case PropertyNames.RotationProperty:
 								float rotation = ((FloatKeyframeValue)keyframeableValue).CachedValue;
 								rotation = MathHelper.ToDegrees(rotation);
 
@@ -865,14 +885,14 @@ namespace Editor.Gui
 									keyframeableValue.SetKeyframeValue(null, MathHelper.ToRadians(rotation));
 
 								break;
-							case TransparencyProperty:
+							case PropertyNames.TransparencyProperty:
 								float transparency = ((FloatKeyframeValue)keyframeableValue).CachedValue;
 
 								if (ImGui.DragFloat(keyframeableValue.Name, ref transparency, 0.001f, 0, 1f, "%f", ImGuiSliderFlags.NoRoundToFormat))
 									keyframeableValue.SetKeyframeValue(null, transparency);
 
 								break;
-							case ZIndexProperty:
+							case PropertyNames.ZIndexProperty:
 								float zIndex = ((FloatKeyframeValue)keyframeableValue).CachedValue;
 
 								if (ImGui.DragFloat(keyframeableValue.Name, ref zIndex, 0.01f, 0, float.MaxValue, "%f", ImGuiSliderFlags.AlwaysClamp))
@@ -915,8 +935,8 @@ namespace Editor.Gui
 
 						switch (keyframeableValue.Name)
 						{
-							case SizeProperty:
-							case PositionProperty:
+							case PropertyNames.SizeProperty:
+							case PropertyNames.PositionProperty:
 								NVector2 vector2 = ((Vector2KeyframeValue)keyframeableValue).CachedValue.ToNumerics();
 
 								if (ImGui.DragFloat2(keyframeableValue.Name, ref vector2))

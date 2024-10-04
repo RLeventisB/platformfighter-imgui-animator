@@ -1,4 +1,5 @@
 ﻿using Editor.Model;
+using Editor.Objects;
 
 using ImGuiNET;
 
@@ -355,7 +356,7 @@ namespace Editor.Gui
 								ImGui.SetClipboardText("");
 							}
 
-							if (value.Name == RotationProperty)
+							if (value.Name == PropertyNames.RotationProperty)
 								keyframeTooltip = $"{(float)keyframe.Value * 180 / MathHelper.Pi}";
 							else
 								keyframeTooltip = $"{keyframe.Value}";

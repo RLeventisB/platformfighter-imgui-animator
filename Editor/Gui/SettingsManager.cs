@@ -1,4 +1,4 @@
-﻿using Editor.Model;
+﻿using Editor.Objects;
 
 using ImGuiNET;
 
@@ -22,6 +22,15 @@ namespace Editor.Gui
 			ReferenceHandler = ReferenceHandler.Preserve,
 			IgnoreReadOnlyFields = true,
 			IgnoreReadOnlyProperties = true,
+			ReadCommentHandling = JsonCommentHandling.Skip,
+			DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+			Converters =
+			{
+				new JsonStringEnumConverter<HitboxType>(JsonNamingPolicy.SnakeCaseLower),
+				new JsonStringEnumConverter<HitboxConditions>(JsonNamingPolicy.SnakeCaseLower),
+				new JsonStringEnumConverter<LaunchType>(JsonNamingPolicy.SnakeCaseLower),
+				new JsonStringEnumConverter<InterpolationType>(JsonNamingPolicy.SnakeCaseLower),
+			}
 		};
 
 		public static ImGuiWindowFlags ToolsWindowFlags => LockToolWindows ? ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoDocking : ImGuiWindowFlags.None;
@@ -76,6 +85,7 @@ namespace Editor.Gui
 						}
 					}
 				}
+
 				JsonData data = JsonSerializer.Deserialize<JsonData>(text, DefaultSerializerOptions);
 
 				EditorApplication.ApplyJsonData(data);
@@ -84,14 +94,15 @@ namespace Editor.Gui
 			{
 				Console.WriteLine(e);
 			}
+
 			lastProjectSavePath = filePath;
 		}
 
 		public static void SaveProject(string filePath)
 		{
-			if(File.Exists(filePath))
+			if (File.Exists(filePath))
 				File.Delete(filePath);
-			
+
 			using (FileStream stream = File.Open(filePath, FileMode.OpenOrCreate, FileAccess.Write))
 			{
 				stream.Seek(0, SeekOrigin.Begin);
