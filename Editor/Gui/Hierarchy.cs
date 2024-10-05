@@ -889,7 +889,7 @@ namespace Editor.Gui
 								rotation = MathHelper.ToDegrees(rotation);
 
 								if (ImGui.DragFloat(keyframeableValue.Name, ref rotation, 1f, float.MinValue, float.MaxValue, "%.0f deg", ImGuiSliderFlags.NoRoundToFormat))
-									keyframeableValue.SetKeyframeValue(null, MathHelper.ToRadians(rotation));
+									keyframeableValue.SetKeyframeValue(null, MathHelper.ToRadians(rotation), true);
 
 								break;
 							case PropertyNames.TransparencyProperty:
