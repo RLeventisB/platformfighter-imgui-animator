@@ -126,8 +126,15 @@ namespace Editor
 			};
 
 			ExternalActions.AreKeyframesSetOnModify = () => SettingsManager.SetKeyframeOnModify;
+			ExternalActions.AreKeyframesAddedToLinkOnModify = () => SettingsManager.AddKeyframeToLinkOnModify;
 			ExternalActions.GetGraphicsDevice = () => GraphicsDevice;
-			ExternalActions.GetTextureFrameByName = name => State.Textures[name];
+			ExternalActions.GetTextureFrameByName = name =>
+			{
+				if (State.Textures.TryGetValue(name, out TextureFrame result))
+					return result;
+
+				return SinglePixel;
+			};
 			ExternalActions.GetTextureAnimationObjectByName = name => State.GraphicEntities[name];
 			ExternalActions.GetHitboxAnimationObjectByName = name => State.HitboxEntities[name];
 			ExternalActions.CalculateQuadPoints = GetQuadsPrimitive;
@@ -639,42 +646,32 @@ namespace Editor
 
 			List<Keyframe> keyframesToResolve = new List<Keyframe>(); // since json loads objects as JsonElements :(
 
+			TextureAnimationObject modelGraphic = new TextureAnimationObject();
+
 			foreach (TextureAnimationObject graphicObject in data.graphicObjects)
 			{
 				State.GraphicEntities.Add(graphicObject.Name, graphicObject);
 
 				foreach (KeyframeableValue keyframeableValue in graphicObject.EnumerateKeyframeableValues())
 				{
-					foreach (KeyframeLink link in keyframeableValue.links)
-					{
-						link.ContainingValue = keyframeableValue;
-
-						foreach (Keyframe keyframe in link.Keyframes) // sometimes keyframes dont store their containing link so fixup!!
-						{
-							keyframe.ContainingLink = link;
-						}
-					}
+					KeyframeableValue value = modelGraphic.EnumerateKeyframeableValues().FirstOrDefault(v => v.Name == keyframeableValue.Name, null);
+					if(value is not null)
+						keyframeableValue.DefaultValue = value.DefaultValue ;
 
 					keyframesToResolve.AddRange(keyframeableValue.keyframes);
 				}
 			}
 
+			HitboxAnimationObject modelHitbox = new HitboxAnimationObject();
 			foreach (HitboxAnimationObject hitboxObject in data.hitboxObjects)
 			{
 				State.HitboxEntities.Add(hitboxObject.Name, hitboxObject);
 
 				foreach (KeyframeableValue keyframeableValue in hitboxObject.EnumerateKeyframeableValues())
 				{
-					foreach (KeyframeLink link in keyframeableValue.links)
-					{
-						link.ContainingValue = keyframeableValue;
-
-						foreach (Keyframe keyframe in link.Keyframes) // sometimes keyframes dont store their containing link so fixup!!
-						{
-							keyframe.ContainingLink = link;
-						}
-					}
-
+					KeyframeableValue value = modelHitbox.EnumerateKeyframeableValues().FirstOrDefault(v => v.Name == keyframeableValue.Name, null);
+					if(value is not null)
+						keyframeableValue.DefaultValue = value.DefaultValue ;
 					keyframesToResolve.AddRange(keyframeableValue.keyframes);
 				}
 			}

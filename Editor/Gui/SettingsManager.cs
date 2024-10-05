@@ -37,14 +37,6 @@ namespace Editor.Gui
 		public const int SaveFileMagicNumber = 1296649793;
 		public const int AllocatedSettings = 16;
 		public static int ValidSettings { get; private set; }
-		/// <summary>
-		///     0 = Mostrar posiciones adyacentes
-		///     1 = Mostrar rotaciones adyacentes
-		///     2 = Confirmar nuevo proyecto
-		///     3 = Mostrar frame nuevo al mover keyframes
-		///     4 = Reproducir al seleccionar keyframe
-		///     5 = 
-		/// </summary>
 		private static BitArray settingsFlags = new BitArray(AllocatedSettings);
 		public static BoolSetting ShowPositionLinks = new BoolSetting(0, "Mostrar posiciones enlazadas");
 		public static BoolSetting ShowRotationLinks = new BoolSetting(1, "Mostrar rotaciones enlazadas");
@@ -54,6 +46,7 @@ namespace Editor.Gui
 		public static BoolSetting LockToolWindows = new BoolSetting(5, "Fijar la posicion y tamaño de las ventanas de herramientas");
 		public static BoolSetting SetKeyframeOnModify = new BoolSetting(6, "Al cambiar un valor, asignar instantaneamente el valor al keyframe");
 		public static BoolSetting CompressOnSave = new BoolSetting(7, "Comprimir el proyecto al guardar");
+		public static BoolSetting AddKeyframeToLinkOnModify = new BoolSetting(8, "Al cambiar un valor, el keyframe nuevo se añade al link si hay uno que lo contiene");
 		public static string lastProjectSavePath;
 		public static BoolSetting[] Settings =>
 		[
@@ -64,7 +57,8 @@ namespace Editor.Gui
 			PlayOnKeyframeSelect,
 			LockToolWindows,
 			SetKeyframeOnModify,
-			CompressOnSave
+			CompressOnSave,
+			AddKeyframeToLinkOnModify
 		];
 
 		public static void LoadProject(string filePath)

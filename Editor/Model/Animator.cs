@@ -96,8 +96,8 @@ namespace Editor.Model
 			{
 				foreach (KeyframeableValue value in entity.EnumerateKeyframeableValues())
 				{
-					if (value.HasKeyframes() && value[0].Frame < firstFrame)
-						firstFrame = value[0].Frame;
+					if (value.HasKeyframes() && value.keyframes[0].Frame < firstFrame)
+						firstFrame = value.keyframes[0].Frame;
 				}
 			}
 
@@ -117,8 +117,8 @@ namespace Editor.Model
 
 					int lastIndex = value.KeyframeCount - 1;
 
-					if (value[lastIndex].Frame > lastFrame)
-						lastFrame = value[lastIndex].Frame;
+					if (value.keyframes[lastIndex].Frame > lastFrame)
+						lastFrame = value.keyframes[lastIndex].Frame;
 				}
 			}
 
@@ -144,7 +144,7 @@ namespace Editor.Model
 					else if (index >= value.KeyframeCount)
 						index = value.KeyframeCount - 1;
 
-					Keyframe kf = value[index];
+					Keyframe kf = value.keyframes[index];
 
 					if (kf.Frame > previousFrame)
 						previousFrame = kf.Frame;
@@ -178,7 +178,7 @@ namespace Editor.Model
 					else if (index >= value.KeyframeCount)
 						index = value.KeyframeCount - 1;
 
-					Keyframe kf = value[index];
+					Keyframe kf = value.keyframes[index];
 
 					if (kf.Frame == _currentKeyframe)
 						continue;
@@ -225,30 +225,7 @@ namespace Editor.Model
 			if (Timeline.newLinkCreationData == null)
 				return;
 
-			Stop();
-
-			ImGuiIOPtr io = ImGui.GetIO();
-
-			if (io.KeyCtrl && ImGui.IsKeyPressed(ImGuiKey.LeftArrow) && Timeline.newLinkCreationData.Border > 0)
-			{
-				Timeline.newLinkCreationData.offset--;
-			}
-
-			if (io.KeyCtrl && ImGui.IsKeyPressed(ImGuiKey.RightArrow) && Timeline.newLinkCreationData.Border < Timeline.newLinkCreationData.value.KeyframeCount - 1)
-			{
-				Timeline.newLinkCreationData.offset++;
-			}
-
-			if (ImGui.IsKeyPressed(ImGuiKey.Escape))
-			{
-				Timeline.newLinkCreationData = null;
-			}
-
-			if (Timeline.newLinkCreationData != null && Timeline.newLinkCreationData.Length > 1 && ImGui.IsKeyPressed(ImGuiKey.Enter))
-			{
-				Timeline.newLinkCreationData.CreateLink();
-				Timeline.newLinkCreationData = null;
-			}
+			HandleNewLinkInputs();
 		}
 
 		private void HandleNewLinkInputs()

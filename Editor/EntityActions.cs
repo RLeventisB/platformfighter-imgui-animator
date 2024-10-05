@@ -70,10 +70,16 @@ namespace Editor
 			if (ImGui.IsItemActive())
 			{
 				Vector2 diff = Input.MouseWorld - entity.Position.CachedValue;
-				float atan2 = MathF.Atan2(diff.Y, diff.X);
-				entity.Rotation.SetKeyframeValue(null, atan2);
+				float oldRotation = entity.Rotation.CachedValue;
+				float atan2 = MathF.Atan2((diff.Y),  (diff.X));
 
-				ImGui.SetTooltip("Rotacion actual:\n" + MathHelper.ToDegrees(atan2));
+				float diffAngle = atan2 - oldRotation; // haha suck my dick and balls i made a working signed delta angular calculator
+				while (diffAngle >= MathF.PI) diffAngle -= 2 * MathF.PI;
+				while (diffAngle < -MathF.PI) diffAngle += 2 * MathF.PI;
+				
+				entity.Rotation.SetKeyframeValue(null, oldRotation + diffAngle);
+
+				ImGui.SetTooltip("Rotacion actual:\n" + MathHelper.ToDegrees(entity.Rotation.CachedValue));
 			}
 			else
 			{

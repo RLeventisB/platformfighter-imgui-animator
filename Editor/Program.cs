@@ -16,10 +16,11 @@ namespace game
 		[STAThread]
 		public static void Main()
 		{
-			if (true)
+			if (false)
 			{
 				Directory.CreateDirectory("./parsed");
-				foreach (string filePath in Directory.GetFiles(@"D:\Otras cosas\proyectos codigo\platformfighter-imgui-animator\Editor\bin\Debug\net8.0\projects\terminados", "*.anim"))
+
+				foreach (string filePath in Directory.GetFiles(@".\projects\terminados", "*.anim"))
 				{
 					JsonData data = JsonSerializer.Deserialize<JsonData>(File.ReadAllBytes(filePath), SettingsManager.DefaultSerializerOptions);
 					List<Keyframe> keyframesToResolve = new List<Keyframe>(); // since json loads objects as JsonElements :(
@@ -103,11 +104,64 @@ namespace game
 						objectAlt.Name = entity.Name;
 						objectAlt.TextureName = entity.TextureName;
 						objectAlt.Position = KeyframeableValueAlt.From(objectAlt, entity.Position);
+						objectAlt.Scale = KeyframeableValueAlt.From(objectAlt, entity.Scale);
+						objectAlt.FrameIndex = KeyframeableValueAlt.From(objectAlt, entity.FrameIndex);
+						objectAlt.Rotation = KeyframeableValueAlt.From(objectAlt, entity.Rotation);
+						objectAlt.Transparency = KeyframeableValueAlt.From(objectAlt, entity.Transparency);
+						objectAlt.ZIndex = KeyframeableValueAlt.From(objectAlt, entity.ZIndex);
 
 						parsedGraphicEntities.Add(objectAlt);
 					}
 
-					byte[] serializedBytes = JsonSerializer.SerializeToUtf8Bytes(new JsonDataAlt(data.looping, data.playingForward, data.playingBackwards, data.selectedFps, data.currentKeyframe, data.textures,
+					foreach (HitboxAnimationObject entity in hitboxEntities)
+					{
+						HitboxAnimationObjectAlt objectAlt = new HitboxAnimationObjectAlt();
+						objectAlt.Name = entity.Name;
+						objectAlt.Position = KeyframeableValueAlt.From(objectAlt, entity.Position);
+						objectAlt.Size = KeyframeableValueAlt.From(objectAlt, entity.Size);
+						objectAlt.Damage = entity.Damage;
+						objectAlt.SpawnFrame = entity.SpawnFrame;
+						objectAlt.FrameDuration = entity.FrameDuration;
+						objectAlt.Hitstun = entity.Hitstun;
+						objectAlt.HitstunGrowth = entity.HitstunGrowth;
+						objectAlt.MaxHitstun = entity.MaxHitstun;
+						objectAlt.LaunchAngle = entity.LaunchAngle;
+						objectAlt.LaunchPotency = entity.LaunchPotency;
+						objectAlt.LaunchPotencyGrowth = entity.LaunchPotencyGrowth;
+						objectAlt.LaunchPotencyMax = entity.LaunchPotencyMax;
+						objectAlt.ShieldStun = entity.ShieldStun;
+						objectAlt.DuelGameLag = entity.DuelGameLag;
+						objectAlt.Conditions = entity.Conditions;
+						objectAlt.LaunchType = entity.LaunchType;
+						objectAlt.Type = entity.Type;
+						objectAlt.AttackId = entity.AttackId;
+						objectAlt.ImmunityAfterHit = entity.ImmunityAfterHit;
+						objectAlt.ShieldLaunchAngle = entity.ShieldLaunchAngle;
+						objectAlt.ShieldPotency = entity.ShieldPotency;
+						objectAlt.Priority = entity.Priority;
+						objectAlt.Rate = entity.Rate;
+
+						parsedHitboxEntities.Add(objectAlt);
+					}
+
+					List<KeyframeAlt> allKeyframes = new List<KeyframeAlt>();
+					foreach (TextureAnimationObjectAlt graphicEntity in parsedGraphicEntities)
+					{
+						allKeyframes.AddRange(graphicEntity.Position.keyframes);
+						allKeyframes.AddRange(graphicEntity.Scale.keyframes);
+						allKeyframes.AddRange(graphicEntity.FrameIndex.keyframes);
+						allKeyframes.AddRange(graphicEntity.Rotation.keyframes);
+						allKeyframes.AddRange(graphicEntity.Transparency.keyframes);
+						allKeyframes.AddRange(graphicEntity.ZIndex.keyframes);
+					}
+					foreach (HitboxAnimationObjectAlt hitboxEntity in parsedHitboxEntities)
+					{
+						allKeyframes.AddRange(hitboxEntity.Position.keyframes);
+						allKeyframes.AddRange(hitboxEntity.Size.keyframes);
+					}
+
+					byte[] serializedBytes = JsonSerializer.SerializeToUtf8Bytes(new JsonDataAlt(data.looping, data.playingForward, data.playingBackwards, data.selectedFps, data.currentKeyframe, 
+						data.textures,
 						parsedGraphicEntities.ToArray(),
 						parsedHitboxEntities.ToArray()
 					), SettingsManager.DefaultSerializerOptions);

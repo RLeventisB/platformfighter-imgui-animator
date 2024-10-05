@@ -302,7 +302,7 @@ namespace Editor.Gui
 								OpenLinkPopup(link);
 							}
 
-							linkTooltip = $"Link {{{string.Join(", ", link.Keyframes.Select(v => v.ToString()))}}}\n({link.InterpolationType})";
+							linkTooltip = $"Link {{{string.Join(", ", link.Keyframes.Select(v => v.Frame.ToString()))}}}\n({link.InterpolationType})";
 						}
 					}
 
@@ -340,7 +340,7 @@ namespace Editor.Gui
 
 							if (ImGui.IsMouseReleased(ImGuiMouseButton.Right))
 							{
-								ResetSavedInput(keyframe.Frame.ToString());
+								ResetSavedInput(ExternalActions.GetCurrentFrame().ToString());
 								cloneKeyframePopupOpen = true;
 								keyframeToClone = keyframe;
 							}
@@ -423,7 +423,22 @@ namespace Editor.Gui
 					if (ImGui.Button("Clonar") && validFrame)
 					{
 						cloneKeyframePopupOpen = false;
-						keyframeToClone.ContainingValue?.SetKeyframeValue(finalFrame, keyframeToClone.Value);
+
+						if (keyframeToClone.ContainingValue == null)
+						{
+							if (keyframeToClone.Value is IEnumerable<KeyframeableValue> values)
+							{
+								foreach (KeyframeableValue value in values)
+								{
+									Keyframe keyframeToCloneLocal = value.GetKeyframe(keyframeToClone.Frame);
+									value.SetKeyframeValue(finalFrame, keyframeToCloneLocal.Value);
+								}
+							}
+						}
+						else
+						{
+							keyframeToClone.ContainingValue.SetKeyframeValue(finalFrame, keyframeToClone.Value);
+						}
 						keyframeToClone = null;
 
 						ImGui.CloseCurrentPopup();
@@ -471,6 +486,13 @@ namespace Editor.Gui
 						}
 
 						EditorApplication.SetDragAction(new MoveKeyframeDelegateAction(keyframesToMove.ToArray()));
+					}
+					
+					if (ImGui.IsMouseReleased(ImGuiMouseButton.Right))
+					{
+						ResetSavedInput(ExternalActions.GetCurrentFrame().ToString());
+						cloneKeyframePopupOpen = true;
+						keyframeToClone = new Keyframe(null, frame, selectedAnimationObject.EnumerateKeyframeableValues().Where(v => v.HasKeyframeAtFrame(frame)));
 					}
 
 					if (ImGui.IsKeyDown(ImGuiKey.Delete))
@@ -664,7 +686,7 @@ namespace Editor.Gui
 						0x66666666, headerHeight, out _, out _);
 
 					ImGui.BeginTooltip();
-					List<Keyframe> keyframes = newLinkCreationData.value.keyframes;
+					KeyframeList keyframes = newLinkCreationData.value.keyframes;
 					ImGui.Text($"Creando enlace desde frame {keyframes[newLinkCreationData.LowerBorder].Frame} hasta {keyframes[newLinkCreationData.UpperBorder].Frame}\nEn track {newLinkCreationData.value.Owner.Name}/{newLinkCreationData.value.Name}");
 
 					if (newLinkCreationData.Length > 1)
