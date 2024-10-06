@@ -183,11 +183,14 @@ namespace Editor
 			foreach ((KeyframeableValue value, int index) in _dataPairs)
 			{
 				Keyframe keyframe = value.keyframes[index];
-				KeyframeLink link = keyframe.ContainingLink;
-				value.keyframes.RemoveAt(index);
+				
+				KeyframeLink link = KeyframeableValue.FindContainingLink(keyframe.ContainingValue, keyframe);
+				link?.Remove(keyframe);
+
 				keyframe.Frame = hoveringFrame;
-				value.Add(keyframe, false);
-				link?.Sort();
+				value.SortFrames();
+				
+				link?.Add(keyframe.Frame);
 				value.InvalidateCachedValue();
 			}
 		}

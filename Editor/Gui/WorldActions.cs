@@ -40,7 +40,7 @@ namespace Editor.Gui
 					IAnimationObject obj = EditorApplication.selectedData.GetLoneObject();
 					bool isThisObjectHovered = obj.IsBeingHovered(Input.MouseWorld, EditorApplication.State.Animator.CurrentKeyframe);
 
-					if (ImGui.IsMouseClicked(ImGuiMouseButton.Left))
+					if (ImGui.IsMouseClicked(ImGuiMouseButton.Left) && windowFocused)
 					{
 						switch (obj)
 						{

@@ -95,7 +95,22 @@ namespace Editor.Gui
 		public static void SaveProject(string filePath)
 		{
 			if (File.Exists(filePath))
-				File.Delete(filePath);
+			{
+				string directory = filePath.Replace(Path.GetFileName(filePath), string.Empty);
+				string originalName = Path.GetFileNameWithoutExtension(filePath);
+				string fullNameForBackup = originalName + ".animold";
+				int counter = 1;
+
+				while (File.Exists(Path.Combine(directory + fullNameForBackup)))
+				{
+					fullNameForBackup = originalName + counter + ".animold";
+					counter++;
+				}
+
+				FileInfo info = new FileInfo(filePath);
+
+				info.MoveTo(Path.Combine(directory + fullNameForBackup));
+			}
 
 			using (FileStream stream = File.Open(filePath, FileMode.OpenOrCreate, FileAccess.Write))
 			{

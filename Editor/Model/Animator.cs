@@ -137,7 +137,7 @@ namespace Editor.Model
 					if (!value.HasKeyframes())
 						continue;
 
-					int index = value.GetIndexOrNext(f) - 1;
+					int index = value.GetIndexOrNext(Keyframe.CreateDummyKeyframe(f)) - 1;
 
 					if (index < 0)
 						index = 0;
@@ -166,7 +166,7 @@ namespace Editor.Model
 					if (!value.HasKeyframes())
 						continue;
 
-					int index = value.FindIndexByKeyframe(f);
+					int index = value.FindIndexByKeyframe(Keyframe.CreateDummyKeyframe(f));
 
 					if (index < 0)
 						index = ~index;

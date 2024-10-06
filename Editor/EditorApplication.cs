@@ -24,7 +24,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
-using System.Text.Json;
 using System.Text.Json.Serialization;
 
 using Vector3 = Microsoft.Xna.Framework.Vector3;
@@ -135,6 +134,7 @@ namespace Editor
 
 				return SinglePixel;
 			};
+
 			ExternalActions.GetTextureAnimationObjectByName = name => State.GraphicEntities[name];
 			ExternalActions.GetHitboxAnimationObjectByName = name => State.HitboxEntities[name];
 			ExternalActions.CalculateQuadPoints = GetQuadsPrimitive;
@@ -519,7 +519,7 @@ namespace Editor
 						}
 					}
 
-					foreach (Keyframe keyframe in Timeline.selectedLink.link.Keyframes)
+					foreach (Keyframe keyframe in Timeline.selectedLink.link.GetKeyframes())
 					{
 						Vector2 position = Camera.WorldToScreen((Vector2)keyframe.Value);
 						bool hover = MiscellaneousFunctions.IsInsideRectangle(position, new Vector2(10), MathHelper.PiOver4, ImGui.GetMousePos());
@@ -541,9 +541,9 @@ namespace Editor
 
 					break;
 				case PropertyNames.RotationProperty when SettingsManager.ShowRotationLinks:
-					for (int index = 0; index < Timeline.selectedLink.link.Keyframes.Count; index++)
+					for (int index = 0; index < Timeline.selectedLink.link.Frames.Count; index++)
 					{
-						Keyframe keyframe = Timeline.selectedLink.link.Keyframes[index];
+						int frame = Timeline.selectedLink.link.Frames[index];
 						float rotation = ((float[])Timeline.selectedLink.extraData)[index];
 
 						// TODO: implement
@@ -644,8 +644,6 @@ namespace Editor
 				State.Textures.Add(texture.Name, texture);
 			}
 
-			List<Keyframe> keyframesToResolve = new List<Keyframe>(); // since json loads objects as JsonElements :(
-
 			TextureAnimationObject modelGraphic = new TextureAnimationObject();
 
 			foreach (TextureAnimationObject graphicObject in data.graphicObjects)
@@ -655,14 +653,25 @@ namespace Editor
 				foreach (KeyframeableValue keyframeableValue in graphicObject.EnumerateKeyframeableValues())
 				{
 					KeyframeableValue value = modelGraphic.EnumerateKeyframeableValues().FirstOrDefault(v => v.Name == keyframeableValue.Name, null);
-					if(value is not null)
-						keyframeableValue.DefaultValue = value.DefaultValue ;
+					if (value is not null)
+						keyframeableValue.DefaultValue = value.DefaultValue;
 
-					keyframesToResolve.AddRange(keyframeableValue.keyframes);
+					ResolveKeyframeValue(ref keyframeableValue.DefaultValue, value);
+
+					foreach (Keyframe keyframe in keyframeableValue.keyframes)
+					{
+						keyframe.Value = ResolveKeyframeValue(keyframe.Value, keyframeableValue);
+					}
+
+					foreach (KeyframeLink link in keyframeableValue.links)
+					{
+						link.SanitizeValues();
+					}
 				}
 			}
 
 			HitboxAnimationObject modelHitbox = new HitboxAnimationObject();
+
 			foreach (HitboxAnimationObject hitboxObject in data.hitboxObjects)
 			{
 				State.HitboxEntities.Add(hitboxObject.Name, hitboxObject);
@@ -670,38 +679,20 @@ namespace Editor
 				foreach (KeyframeableValue keyframeableValue in hitboxObject.EnumerateKeyframeableValues())
 				{
 					KeyframeableValue value = modelHitbox.EnumerateKeyframeableValues().FirstOrDefault(v => v.Name == keyframeableValue.Name, null);
-					if(value is not null)
-						keyframeableValue.DefaultValue = value.DefaultValue ;
-					keyframesToResolve.AddRange(keyframeableValue.keyframes);
-				}
-			}
+					if (value is not null)
+						keyframeableValue.DefaultValue = value.DefaultValue;
 
-			foreach (Keyframe keyframe in keyframesToResolve)
-			{
-				if (keyframe.Value is not JsonElement element)
-					continue;
+					ResolveKeyframeValue(ref keyframeableValue.DefaultValue, keyframeableValue);
 
-				try
-				{
-					switch (keyframe.ContainingValue)
+					foreach (Keyframe keyframe in keyframeableValue.keyframes)
 					{
-						case Vector2KeyframeValue:
-							keyframe.Value = new Vector2(element.GetProperty("x").GetSingle(), element.GetProperty("y").GetSingle());
-
-							break;
-						case IntKeyframeValue:
-							keyframe.Value = element.GetInt32();
-
-							break;
-						case FloatKeyframeValue:
-							keyframe.Value = element.GetSingle();
-
-							break;
+						keyframe.Value = ResolveKeyframeValue(keyframe.Value, keyframeableValue);
 					}
-				}
-				catch (Exception e) // we are COOKED
-				{
-					Console.WriteLine(e);
+
+					foreach (KeyframeLink link in keyframeableValue.links)
+					{
+						link.SanitizeValues();
+					}
 				}
 			}
 
@@ -711,6 +702,21 @@ namespace Editor
 			State.Animator.Looping = data.looping;
 			State.Animator.PlayingForward = data.playingForward;
 			State.Animator.PlayingBackward = data.playingBackwards;
+		}
+
+		public static void ResolveKeyframeValue(ref object value, KeyframeableValue containingValue)
+		{
+			value = ResolveKeyframeValue(value, containingValue);
+		}
+
+		public static object ResolveKeyframeValue(object value, KeyframeableValue containingValue)
+		{
+			if (value is int intValue && containingValue is FloatKeyframeValue)
+			{
+				return (float)intValue;
+			}
+
+			return value;
 		}
 	}
 	public record JsonData(bool looping, bool playingForward, bool playingBackwards, int selectedFps, int currentKeyframe, TextureFrame[] textures, TextureAnimationObject[] graphicObjects, HitboxAnimationObject[] hitboxObjects)
@@ -760,7 +766,7 @@ namespace Editor
 				case PropertyNames.RotationProperty:
 					List<float> rotations = new List<float>();
 
-					foreach (Keyframe keyframe in link.Keyframes)
+					foreach (Keyframe keyframe in link.GetKeyframes())
 					{
 						rotations.Add((float)keyframe.Value);
 					}

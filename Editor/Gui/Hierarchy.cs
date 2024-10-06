@@ -23,7 +23,7 @@ namespace Editor.Gui
 		private static float projectActionsKeyframeMult = 1;
 		private static IAnimationObject objectToRename;
 		private static int projectActionsKeyframeStart = -1;
-		private static int projectActionsNewLinkType = 0;
+		private static int projectActionsNewLinkType;
 
 		public static void Draw()
 		{
@@ -173,16 +173,20 @@ namespace Editor.Gui
 
 				if (ImGui.BeginPopupModal("Project actions", ref popupOpen, ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse | ImGuiWindowFlags.NoDocking))
 				{
+					ImGui.SeparatorText("Informacion del archivo");
 					if (SettingsManager.lastProjectSavePath is not null)
 						ImGui.Text("Nombre del proyecto: " + Path.GetFileName(SettingsManager.lastProjectSavePath));
 					else
 						ImGui.Text("Proyecto sin guardar");
 
+					ImGui.SeparatorText("Acciones globales");
+
 					ImGui.InputFloat2("Ajustar todas las posiciones por:", ref projectActionsPositionOffset);
 
 					ImGui.SetItemTooltip("Esto añade un valor constante a todas las posiciones de los objetos en el mundo.");
 
-					ImGui.BeginDisabled(projectActionsPositionOffset.LengthSquared()==0);
+					ImGui.BeginDisabled(projectActionsPositionOffset.LengthSquared() == 0);
+
 					if (ImGui.Button("Cambiar posiciones"))
 					{
 						foreach (TextureAnimationObject textureobject in EditorApplication.State.Animator.RegisteredGraphics)
@@ -207,11 +211,15 @@ namespace Editor.Gui
 
 						projectActionsPositionOffset = NVector2.Zero;
 					}
+
 					ImGui.EndDisabled();
+
+					ImGui.Separator();
 
 					ImGui.InputFloat("Multiplicar tiempo global por:", ref projectActionsKeyframeMult);
 
 					ImGui.BeginDisabled(projectActionsKeyframeMult is 0 or 1);
+
 					if (ImGui.Button("Multiplicar tiempo"))
 					{
 						foreach (TextureAnimationObject textureobject in EditorApplication.State.Animator.RegisteredGraphics)
@@ -245,13 +253,17 @@ namespace Editor.Gui
 
 						projectActionsKeyframeMult = 1;
 					}
+
 					ImGui.EndDisabled();
 
 					ImGui.SetItemTooltip("Esto multiplica todas las variables relacionadas con el tiempo en el mundo por un valor.\nEsto incluye posicion de los fotograma claves, y las duraciones de las hitboxes.\nTener en cuenta que esto redondea valores, haciendolo \"lossy\"");
 
+					ImGui.Separator();
+
 					ImGui.InputInt("Fotograma para inicio:", ref projectActionsKeyframeStart);
 
 					ImGui.BeginDisabled(projectActionsKeyframeStart == -1);
+
 					if (ImGui.Button("Usar fotograma como base"))
 					{
 						foreach (TextureAnimationObject textureobject in EditorApplication.State.Animator.RegisteredGraphics)
@@ -262,7 +274,7 @@ namespace Editor.Gui
 								{
 									storedValue = value.DefaultValue;
 								}
-								
+
 								value.keyframes.Clear();
 								value.links.Clear();
 
@@ -278,7 +290,7 @@ namespace Editor.Gui
 								{
 									storedValue = value.DefaultValue;
 								}
-								
+
 								value.keyframes.Clear();
 								value.links.Clear();
 
@@ -286,13 +298,15 @@ namespace Editor.Gui
 							}
 						}
 					}
+
 					ImGui.EndDisabled();
 
 					ImGui.SetItemTooltip("Borra todos los datos, menos los datos en el fotograma especificado.\nEstos datos seran utilizados como la base de la \"nueva animacion\"");
 
+					ImGui.Separator();
 					string[] names = Enum.GetNames<InterpolationType>();
 					ImGui.Combo("Tipo de enlace nuevo", ref projectActionsNewLinkType, names, names.Length);
-					
+
 					if (ImGui.Button("Enlazar todos los fotogramas vacios"))
 					{
 						if (Timeline.HitboxMode)
@@ -301,7 +315,7 @@ namespace Editor.Gui
 							{
 								foreach (KeyframeableValue value in hitboxObject.EnumerateKeyframeableValues())
 								{
-									IEnumerable<Keyframe> loneKeyframes = value.keyframes.Where(v => v.ContainingLink is null);
+									IEnumerable<Keyframe> loneKeyframes = value.keyframes.Where(v => KeyframeableValue.FindContainingLink(v.ContainingValue, v) is null);
 
 									if (loneKeyframes.Count() > 1)
 									{
@@ -321,7 +335,7 @@ namespace Editor.Gui
 							{
 								foreach (KeyframeableValue value in textureobject.EnumerateKeyframeableValues())
 								{
-									IEnumerable<Keyframe> loneKeyframes = value.keyframes.Where(v => v.ContainingLink is null);
+									IEnumerable<Keyframe> loneKeyframes = value.keyframes.Where(v => KeyframeableValue.FindContainingLink(v.ContainingValue, v) is null);
 
 									if (loneKeyframes.Count() > 1)
 									{
@@ -877,7 +891,7 @@ namespace Editor.Gui
 								int frameIndex = ((IntKeyframeValue)keyframeableValue).CachedValue;
 
 								TextureFrame texture = EditorApplication.State.GetTexture(textureObject.TextureName);
-								int framesX = (texture.Width -  texture.FramePosition.X)/ texture.FrameSize.X;
+								int framesX = (texture.Width - texture.FramePosition.X) / texture.FrameSize.X;
 								int framesY = (texture.Height - texture.FramePosition.Y) / texture.FrameSize.Y;
 
 								if (ImGui.SliderInt(keyframeableValue.Name, ref frameIndex, 0, framesX * framesY - 1))
@@ -902,10 +916,29 @@ namespace Editor.Gui
 							case PropertyNames.ZIndexProperty:
 								float zIndex = ((FloatKeyframeValue)keyframeableValue).CachedValue;
 
-								if (ImGui.DragFloat(keyframeableValue.Name, ref zIndex, 0.01f, 0, float.MaxValue, "%f", ImGuiSliderFlags.AlwaysClamp))
+								ImGui.SetNextItemWidth(125);
+
+								if (ImGui.DragFloat("##" + keyframeableValue.Name, ref zIndex, 0.01f, 0, float.MaxValue, "%f", ImGuiSliderFlags.AlwaysClamp))
 								{
 									keyframeableValue.SetKeyframeValue(null, zIndex);
 								}
+
+								ImGui.SameLine();
+
+								if (ImGui.Button("+"))
+								{
+									keyframeableValue.SetKeyframeValue(null, Math.Min(1, zIndex + 0.01f));
+								}
+
+								ImGui.SameLine();
+
+								if (ImGui.Button("-"))
+								{
+									keyframeableValue.SetKeyframeValue(null, Math.Max(0, zIndex - 0.01f));
+								}
+
+								ImGui.SameLine();
+								ImGui.Text("Z Index");
 
 								break;
 						}

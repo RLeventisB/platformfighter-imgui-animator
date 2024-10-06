@@ -250,8 +250,8 @@ namespace Editor.Gui
 					ImGui.Text(value.Name);
 					ImGui.NextColumn();
 
-					int vStartIndex = value.GetIndexOrNext(visibleStartingFrame);
-					int vEndIndex = value.GetIndexOrNext((Keyframe)endingFrame);
+					int vStartIndex = value.GetIndexOrNext(Keyframe.CreateDummyKeyframe(visibleStartingFrame));
+					int vEndIndex = value.GetIndexOrNext(Keyframe.CreateDummyKeyframe((int)endingFrame));
 					float mouseWheel = ImGui.GetIO().MouseWheel;
 					string linkTooltip = string.Empty, keyframeTooltip = string.Empty;
 
@@ -290,6 +290,8 @@ namespace Editor.Gui
 							if (ImGui.IsKeyDown(ImGuiKey.Delete))
 							{
 								value.RemoveLink(link);
+
+								continue;
 							}
 
 							if (clickedLeft)
@@ -302,7 +304,7 @@ namespace Editor.Gui
 								OpenLinkPopup(link);
 							}
 
-							linkTooltip = $"Link {{{string.Join(", ", link.Keyframes.Select(v => v.Frame.ToString()))}}}\n({link.InterpolationType})";
+							linkTooltip = $"Link {{{string.Join(", ", link.GetKeyframes().Select(v => v.Frame.ToString()))}}}\n({link.InterpolationType})";
 						}
 					}
 
@@ -320,14 +322,15 @@ namespace Editor.Gui
 
 						if (ImGui.IsMouseHoveringRect(min, max))
 						{
-							int index = value.GetIndexOrNext(keyframe.Frame);
+							int index = value.GetIndexOrNext(keyframe);
 
 							if (clickedLeft)
 							{
 								animator.CurrentKeyframe = keyframe.Frame;
 								animator.Stop();
-								if (keyframe.ContainingLink is not null)
-									EditorApplication.SelectLink(keyframe.ContainingLink);
+								KeyframeLink link = KeyframeableValue.FindContainingLink(keyframe.ContainingValue, keyframe);
+								if (link is not null)
+									EditorApplication.SelectLink(link);
 
 								EditorApplication.SetDragAction(new MoveKeyframeDelegateAction([(value, index)]));
 							}
@@ -338,7 +341,7 @@ namespace Editor.Gui
 									newLinkCreationData = new CreationLinkData(value, vStartIndex + i, 0);
 							}
 
-							if (ImGui.IsMouseReleased(ImGuiMouseButton.Right))
+							if (ImGui.IsMouseReleased(ImGuiMouseButton.Right) && !cloneKeyframePopupOpen)
 							{
 								ResetSavedInput(ExternalActions.GetCurrentFrame().ToString());
 								cloneKeyframePopupOpen = true;
