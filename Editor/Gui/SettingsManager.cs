@@ -13,25 +13,6 @@ namespace Editor.Gui
 {
 	public static class SettingsManager
 	{
-		public static JsonSerializerOptions DefaultSerializerOptions => new JsonSerializerOptions // returns an new instance everytime because caching is brROKEN  I LOST 6 ENTIRE PROJECTS
-		{
-			PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-			AllowTrailingCommas = true,
-			IncludeFields = true,
-			WriteIndented = true,
-			ReferenceHandler = ReferenceHandler.Preserve,
-			IgnoreReadOnlyFields = true,
-			IgnoreReadOnlyProperties = true,
-			ReadCommentHandling = JsonCommentHandling.Skip,
-			DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-			Converters =
-			{
-				new JsonStringEnumConverter<HitboxType>(JsonNamingPolicy.SnakeCaseLower),
-				new JsonStringEnumConverter<HitboxConditions>(JsonNamingPolicy.SnakeCaseLower),
-				new JsonStringEnumConverter<LaunchType>(JsonNamingPolicy.SnakeCaseLower),
-				new JsonStringEnumConverter<InterpolationType>(JsonNamingPolicy.SnakeCaseLower),
-			}
-		};
 
 		public static ImGuiWindowFlags ToolsWindowFlags => LockToolWindows ? ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoDocking : ImGuiWindowFlags.None;
 		public const int SaveFileMagicNumber = 1296649793;
@@ -65,22 +46,8 @@ namespace Editor.Gui
 		{
 			try
 			{
-				byte[] text = File.ReadAllBytes(filePath);
-
-				if (BitConverter.ToUInt16(text, 0) == 0x9DD5) // file is compressed
-				{
-					using (MemoryStream stream = new MemoryStream(text))
-					using (DeflateStream deflateStream = new DeflateStream(stream, CompressionMode.Decompress))
-					{
-						using (MemoryStream outputStream = new MemoryStream())
-						{
-							deflateStream.CopyTo(outputStream);
-							text = outputStream.GetBuffer();
-						}
-					}
-				}
-
-				JsonData data = JsonSerializer.Deserialize<JsonData>(text, DefaultSerializerOptions);
+				JsonData data = JsonData.LoadFromPath(filePath);
+				data.Fixup();
 
 				EditorApplication.ApplyJsonData(data);
 			}
@@ -183,8 +150,8 @@ namespace Editor.Gui
 
 					for (int i = 0; i < settingsFlags.Count; i++)
 					{
-						if (settingsFlags.Get(i)) // WHAT UFE FUJCKKFDGKNFB
-							bytes[i / 8] ^= (byte)(1 << i % 8);
+						if (settingsFlags.Get(i)) 
+							bytes[i / 8] ^= (byte)(1 << i % 8); // WHAT UFE FUJCKKFDGKNFB
 					}
 
 					writer.Write(bytes);

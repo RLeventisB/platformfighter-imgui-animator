@@ -185,12 +185,19 @@ namespace Editor
 				Keyframe keyframe = value.keyframes[index];
 				
 				KeyframeLink link = KeyframeableValue.FindContainingLink(keyframe.ContainingValue, keyframe);
+				
+				if (value.HasKeyframeAtFrame(hoveringFrame))
+				{
+					value.RemoveKeyframe(hoveringFrame, false);
+				}
+				
+				link?.Add(hoveringFrame);
+
 				link?.Remove(keyframe);
 
 				keyframe.Frame = hoveringFrame;
-				value.SortFrames();
 				
-				link?.Add(keyframe.Frame);
+				value.SortFrames();
 				value.InvalidateCachedValue();
 			}
 		}

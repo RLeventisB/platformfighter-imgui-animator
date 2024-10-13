@@ -22,8 +22,10 @@ using Rune.MonoGame;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 using Vector3 = Microsoft.Xna.Framework.Vector3;
@@ -533,7 +535,7 @@ namespace Editor
 								delegate(Vector2 worldDrag, Vector2 _)
 								{
 									Vector2 pos = (Vector2)keyframe.Value;
-									keyframe.Value = pos + worldDrag;
+									keyframe.Value = pos + worldDrag / Camera.Zoom;
 									Timeline.selectedLink.CalculateExtraData();
 								}));
 						}
@@ -644,56 +646,16 @@ namespace Editor
 				State.Textures.Add(texture.Name, texture);
 			}
 
-			TextureAnimationObject modelGraphic = new TextureAnimationObject();
-
 			foreach (TextureAnimationObject graphicObject in data.graphicObjects)
 			{
+				RemoveInvalidLinks(graphicObject);
 				State.GraphicEntities.Add(graphicObject.Name, graphicObject);
-
-				foreach (KeyframeableValue keyframeableValue in graphicObject.EnumerateKeyframeableValues())
-				{
-					KeyframeableValue value = modelGraphic.EnumerateKeyframeableValues().FirstOrDefault(v => v.Name == keyframeableValue.Name, null);
-					if (value is not null)
-						keyframeableValue.DefaultValue = value.DefaultValue;
-
-					ResolveKeyframeValue(ref keyframeableValue.DefaultValue, value);
-
-					foreach (Keyframe keyframe in keyframeableValue.keyframes)
-					{
-						keyframe.Value = ResolveKeyframeValue(keyframe.Value, keyframeableValue);
-					}
-
-					foreach (KeyframeLink link in keyframeableValue.links)
-					{
-						link.SanitizeValues();
-					}
-				}
 			}
-
-			HitboxAnimationObject modelHitbox = new HitboxAnimationObject();
 
 			foreach (HitboxAnimationObject hitboxObject in data.hitboxObjects)
 			{
+				RemoveInvalidLinks(hitboxObject);
 				State.HitboxEntities.Add(hitboxObject.Name, hitboxObject);
-
-				foreach (KeyframeableValue keyframeableValue in hitboxObject.EnumerateKeyframeableValues())
-				{
-					KeyframeableValue value = modelHitbox.EnumerateKeyframeableValues().FirstOrDefault(v => v.Name == keyframeableValue.Name, null);
-					if (value is not null)
-						keyframeableValue.DefaultValue = value.DefaultValue;
-
-					ResolveKeyframeValue(ref keyframeableValue.DefaultValue, keyframeableValue);
-
-					foreach (Keyframe keyframe in keyframeableValue.keyframes)
-					{
-						keyframe.Value = ResolveKeyframeValue(keyframe.Value, keyframeableValue);
-					}
-
-					foreach (KeyframeLink link in keyframeableValue.links)
-					{
-						link.SanitizeValues();
-					}
-				}
 			}
 
 			State.Animator.FPS = data.selectedFps;
@@ -702,6 +664,68 @@ namespace Editor
 			State.Animator.Looping = data.looping;
 			State.Animator.PlayingForward = data.playingForward;
 			State.Animator.PlayingBackward = data.playingBackwards;
+		}
+
+		public static void RemoveInvalidLinks(IAnimationObject animationObject)
+		{
+			foreach (KeyframeableValue value in animationObject.EnumerateKeyframeableValues())
+			{
+				for (int index = 0; index < value.links.Count; index++)
+				{
+					KeyframeLink link = value.links[index];
+					link.SanitizeValues();
+					List<int> frames = link.Frames.ToList();
+					frames.RemoveAll(v => !value.HasKeyframeAtFrame(v));
+					link = new KeyframeLink(link.ContainingValue, frames);
+
+					if (link.Count >= 2)
+						continue;
+
+					value.links.RemoveAt(index);
+					index--;
+				}
+			}
+		}
+	}
+	public record JsonData(bool looping, bool playingForward, bool playingBackwards, int selectedFps, int currentKeyframe, TextureFrame[] textures, TextureAnimationObject[] graphicObjects, HitboxAnimationObject[] hitboxObjects)
+	{
+		[JsonConstructor]
+		public JsonData() : this(false, false, false, 0, 0, Array.Empty<TextureFrame>(), Array.Empty<TextureAnimationObject>(), Array.Empty<HitboxAnimationObject>())
+		{
+		}
+
+		public void Fixup()
+		{
+			foreach (TextureAnimationObject graphicObject in graphicObjects)
+			{
+				foreach (KeyframeableValue keyframeableValue in graphicObject.EnumerateKeyframeableValues())
+				{
+					FixKeyframeableValue(keyframeableValue);
+				}
+			}
+
+			foreach (HitboxAnimationObject hitboxObject in hitboxObjects)
+			{
+				foreach (KeyframeableValue keyframeableValue in hitboxObject.EnumerateKeyframeableValues())
+				{
+					FixKeyframeableValue(keyframeableValue);
+				}
+			}
+		}
+
+		private static void FixKeyframeableValue(KeyframeableValue keyframeableValue)
+		{
+			ResolveKeyframeValue(ref keyframeableValue.DefaultValue, keyframeableValue);
+
+			foreach (Keyframe keyframe in keyframeableValue.keyframes)
+			{
+				keyframe.Value = ResolveKeyframeValue(keyframe.Value, keyframeableValue);
+			}
+
+			foreach (KeyframeLink link in keyframeableValue.links)
+			{
+				link.SanitizeValues();
+			}
 		}
 
 		public static void ResolveKeyframeValue(ref object value, KeyframeableValue containingValue)
@@ -718,12 +742,25 @@ namespace Editor
 
 			return value;
 		}
-	}
-	public record JsonData(bool looping, bool playingForward, bool playingBackwards, int selectedFps, int currentKeyframe, TextureFrame[] textures, TextureAnimationObject[] graphicObjects, HitboxAnimationObject[] hitboxObjects)
-	{
-		[JsonConstructor]
-		public JsonData() : this(false, false, false, 0, 0, Array.Empty<TextureFrame>(), Array.Empty<TextureAnimationObject>(), Array.Empty<HitboxAnimationObject>())
+
+		public static JsonData LoadFromPath(string filePath)
 		{
+			byte[] text = File.ReadAllBytes(filePath);
+
+			if (BitConverter.ToUInt16(text, 0) == 0x9DD5) // file is compressed
+			{
+				using (MemoryStream stream = new MemoryStream(text))
+				using (DeflateStream deflateStream = new DeflateStream(stream, CompressionMode.Decompress))
+				{
+					using (MemoryStream outputStream = new MemoryStream())
+					{
+						deflateStream.CopyTo(outputStream);
+						text = outputStream.GetBuffer();
+					}
+				}
+			}
+
+			return JsonSerializer.Deserialize<JsonData>(text, SettingsManager.DefaultSerializerOptions);
 		}
 	}
 	public record SelectedLinkData
@@ -743,9 +780,18 @@ namespace Editor
 		{
 			RemoveIfPresent(ref Camera.OnDirty, CalculateExtraData);
 
+			KeyframeableValue containingValue = link.ContainingValue;
+
+			if (containingValue is null)
+			{
+				Timeline.selectedLink = null;
+				return;
+			}
+			
 			switch (propertyName)
 			{
 				case PropertyNames.PositionProperty:
+					
 					List<Vector2> positions = new List<Vector2>();
 
 					AddDelegateOnce(ref Camera.OnDirty, CalculateExtraData);
@@ -756,7 +802,7 @@ namespace Editor
 
 					for (int i = minFrame; i <= maxFrame; i++)
 					{
-						positions.Add(Camera.WorldToScreen(((Vector2KeyframeValue)link.ContainingValue).Interpolate(i)));
+						positions.Add(Camera.WorldToScreen(((Vector2KeyframeValue)containingValue).Interpolate(i)));
 					}
 
 					KeyframeableValue.CacheValueOnInterpolate = true;

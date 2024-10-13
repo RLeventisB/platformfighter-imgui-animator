@@ -148,10 +148,10 @@ namespace Editor.Gui
 
 					float oldTimelineZoomTarget = zoomTarget; // im lazy
 					float headerHeightOrsmting = ImGui.GetItemRectSize().Y;
-					float endingFrame = visibleStartingFrame + (visibleEndingFrame - visibleStartingFrame) / TimelineZoom;
 					bool isSelectedEntityValid = EditorApplication.selectedData.IsLone() && EditorApplication.selectedData.Type is SelectionType.Graphic or SelectionType.Hitbox;
 
 					DrawTimeline(animator, isSelectedEntityValid, style.ItemSpacing.Y, headerHeightOrsmting);
+					float endingFrame = visibleStartingFrame + (visibleEndingFrame - visibleStartingFrame) / TimelineZoom;
 
 					ImGui.BeginChild("##content", NVector2.Zero);
 					{
@@ -308,7 +308,7 @@ namespace Editor.Gui
 						}
 					}
 
-					List<Keyframe> list = value.GetRange(vStartIndex, vEndIndex - vStartIndex);
+					List<Keyframe> list = value.GetRange(vStartIndex, Math.Max(vEndIndex - vStartIndex, 0));
 
 					for (int i = 0; i < list.Count; i++)
 					{
@@ -431,11 +431,21 @@ namespace Editor.Gui
 						{
 							if (keyframeToClone.Value is IEnumerable<KeyframeableValue> values)
 							{
+								bool ignoreCheckDefault = ImGui.IsKeyDown(ImGuiKey.ModShift);
+								KeyframeableValue.CacheValueOnInterpolate = false;
 								foreach (KeyframeableValue value in values)
 								{
 									Keyframe keyframeToCloneLocal = value.GetKeyframe(keyframeToClone.Frame);
+
+									if (!ignoreCheckDefault && KeyframeableValue.Interpolate(value, finalFrame, KeyframeableValue.ResolveInterpolator(value), out object resultValue) &&
+									    Equals(keyframeToCloneLocal.Value, resultValue) &&
+									    keyframeToCloneLocal.Frame == 0 &&
+									    value.keyframes.IndexOf(keyframeToCloneLocal) <= 0)
+										continue;
+									
 									value.SetKeyframeValue(finalFrame, keyframeToCloneLocal.Value);
 								}
+								KeyframeableValue.CacheValueOnInterpolate = true;
 							}
 						}
 						else

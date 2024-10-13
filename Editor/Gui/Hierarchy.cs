@@ -22,8 +22,11 @@ namespace Editor.Gui
 		private static NVector2 projectActionsPositionOffset;
 		private static float projectActionsKeyframeMult = 1;
 		private static IAnimationObject objectToRename;
-		private static int projectActionsKeyframeStart = -1;
+		private static int projectActionsKeyframeToClone = -1, projectActionsKeyframeStart;
+		private static int projectActionsKeyframeMove = 0;
 		private static int projectActionsNewLinkType;
+		private static string projectActionsCloneKeyframePath;
+		private static int projectActionsFrameToCloneFromFile, projectActionsClonedFrameFromFileDest;
 
 		public static void Draw()
 		{
@@ -231,6 +234,19 @@ namespace Editor.Gui
 									keyframe.Frame = (int)(keyframe.Frame * projectActionsKeyframeMult);
 								}
 
+								foreach (KeyframeLink link in value.links)
+								{
+									int[] frames = new int[link.Count];
+									link.CopyTo(frames, 0);
+
+									link.Clear();
+
+									foreach (int frame in frames)
+									{
+										link.Add((int)(frame * projectActionsKeyframeMult));
+									}
+								}
+
 								value.CacheValue(null);
 							}
 						}
@@ -242,6 +258,19 @@ namespace Editor.Gui
 								foreach (Keyframe keyframe in value.keyframes)
 								{
 									keyframe.Frame = (int)(keyframe.Frame * projectActionsKeyframeMult);
+								}
+
+								foreach (KeyframeLink link in value.links)
+								{
+									int[] frames = new int[link.Count];
+									link.CopyTo(frames, 0);
+
+									link.Clear();
+
+									foreach (int frame in frames)
+									{
+										link.Add((int)(frame * projectActionsKeyframeMult));
+									}
 								}
 
 								value.CacheValue(null);
@@ -260,9 +289,11 @@ namespace Editor.Gui
 
 					ImGui.Separator();
 
-					ImGui.InputInt("Fotograma para inicio:", ref projectActionsKeyframeStart);
+					ImGui.InputInt("Fotograma para inicio:", ref projectActionsKeyframeToClone);
 
-					ImGui.BeginDisabled(projectActionsKeyframeStart == -1);
+					ImGui.InputInt("Fotograma de destino:", ref projectActionsKeyframeStart);
+
+					ImGui.BeginDisabled(projectActionsKeyframeToClone == -1 || projectActionsKeyframeStart < 0);
 
 					if (ImGui.Button("Usar fotograma como base"))
 					{
@@ -270,7 +301,7 @@ namespace Editor.Gui
 						{
 							foreach (KeyframeableValue value in textureobject.EnumerateKeyframeableValues())
 							{
-								if (!KeyframeableValue.Interpolate(value, projectActionsKeyframeStart, KeyframeableValue.ResolveInterpolator(value), out object storedValue))
+								if (!KeyframeableValue.Interpolate(value, projectActionsKeyframeToClone, KeyframeableValue.ResolveInterpolator(value), out object storedValue))
 								{
 									storedValue = value.DefaultValue;
 								}
@@ -278,7 +309,7 @@ namespace Editor.Gui
 								value.keyframes.Clear();
 								value.links.Clear();
 
-								value.Add(new Keyframe(value, 0, storedValue));
+								value.Add(new Keyframe(value, projectActionsKeyframeStart, storedValue));
 							}
 						}
 
@@ -286,7 +317,7 @@ namespace Editor.Gui
 						{
 							foreach (KeyframeableValue value in hitboxObject.EnumerateKeyframeableValues())
 							{
-								if (!KeyframeableValue.Interpolate(value, projectActionsKeyframeStart, KeyframeableValue.ResolveInterpolator(value.DefaultValue.GetType()), out object storedValue))
+								if (!KeyframeableValue.Interpolate(value, projectActionsKeyframeToClone, KeyframeableValue.ResolveInterpolator(value.DefaultValue.GetType()), out object storedValue))
 								{
 									storedValue = value.DefaultValue;
 								}
@@ -294,9 +325,12 @@ namespace Editor.Gui
 								value.keyframes.Clear();
 								value.links.Clear();
 
-								value.Add(new Keyframe(value, 0, storedValue));
+								value.Add(new Keyframe(value, projectActionsKeyframeStart, storedValue));
 							}
 						}
+
+						projectActionsKeyframeStart = 0;
+						projectActionsKeyframeToClone = -1;
 					}
 
 					ImGui.EndDisabled();
@@ -355,6 +389,155 @@ namespace Editor.Gui
 
 					ImGui.SetItemTooltip("Añade un enlace predeterminado que incluye todos los fotogramas que no tienen algun fotograma, mientras hayan mas de 2.");
 
+					ImGui.Separator();
+
+					if (projectActionsCloneKeyframePath is null)
+						projectActionsCloneKeyframePath = string.Empty;
+
+					ImGui.InputText("Archivo", ref projectActionsCloneKeyframePath, 300);
+
+					ImGui.InputInt("Fotograma a copiar:", ref projectActionsFrameToCloneFromFile);
+
+					ImGui.InputInt("Fotograma destino:", ref projectActionsClonedFrameFromFileDest);
+
+					ImGui.BeginDisabled(!File.Exists(projectActionsCloneKeyframePath));
+
+					if (ImGui.Button("Clonar fotogramas de objetos similares"))
+					{
+						try
+						{
+							JsonData data = JsonData.LoadFromPath(projectActionsCloneKeyframePath);
+							data.Fixup();
+
+							// key is the current project's animation object, values are the file's animation object
+							Dictionary<TextureAnimationObject, TextureAnimationObject> graphicLinks = new Dictionary<TextureAnimationObject, TextureAnimationObject>();
+							Dictionary<HitboxAnimationObject, HitboxAnimationObject> hitboxLinks = new Dictionary<HitboxAnimationObject, HitboxAnimationObject>();
+
+							foreach (TextureAnimationObject animationObjectFromFile in data.graphicObjects)
+							{
+								if (graphicLinks.ContainsValue(animationObjectFromFile))
+									continue;
+
+								foreach (TextureAnimationObject animationObject in EditorApplication.State.GraphicEntities.Values)
+								{
+									if (graphicLinks.ContainsKey(animationObject))
+										continue;
+
+									if (animationObjectFromFile.Name == animationObject.Name &&
+									    animationObjectFromFile.TextureName == animationObject.TextureName)
+									{
+										graphicLinks.Add(animationObject, animationObjectFromFile);
+									}
+								}
+							}
+
+							foreach (HitboxAnimationObject hitboxObjectFromFile in data.hitboxObjects)
+							{
+								if (hitboxLinks.ContainsValue(hitboxObjectFromFile))
+									continue;
+
+								foreach (HitboxAnimationObject hitboxObject in EditorApplication.State.HitboxEntities.Values)
+								{
+									if (hitboxLinks.ContainsKey(hitboxObject))
+										continue;
+
+									if (hitboxObjectFromFile.Name == hitboxObject.Name &&
+									    hitboxObjectFromFile.Type == hitboxObject.Type)
+									{
+										hitboxLinks.Add(hitboxObject, hitboxObjectFromFile);
+									}
+								}
+							}
+
+							KeyframeableValue.CacheValueOnInterpolate = false;
+
+							foreach (KeyValuePair<TextureAnimationObject, TextureAnimationObject> pair in graphicLinks)
+							{
+								List<KeyframeableValue> listToClone = pair.Value.EnumerateKeyframeableValues();
+								List<KeyframeableValue> listToPaste = pair.Key.EnumerateKeyframeableValues();
+
+								CloneKeyframeValues(listToClone, listToPaste);
+							}
+
+							foreach (KeyValuePair<HitboxAnimationObject, HitboxAnimationObject> pair in hitboxLinks)
+							{
+								List<KeyframeableValue> listToClone = pair.Value.EnumerateKeyframeableValues();
+								List<KeyframeableValue> listToPaste = pair.Key.EnumerateKeyframeableValues();
+
+								CloneKeyframeValues(listToClone, listToPaste);
+							}
+
+							KeyframeableValue.CacheValueOnInterpolate = true;
+
+							projectActionsFrameToCloneFromFile = -1;
+							projectActionsClonedFrameFromFileDest = -1;
+							projectActionsCloneKeyframePath = string.Empty;
+
+							void CloneKeyframeValues(List<KeyframeableValue> listToClone, List<KeyframeableValue> listToPaste)
+							{
+								for (int index = 0; index < listToClone.Count; index++)
+								{
+									KeyframeableValue valueToClone = listToClone[index];
+									KeyframeableValue valueToPaste = listToPaste[index];
+
+									KeyframeableValue.Interpolate(valueToClone, projectActionsFrameToCloneFromFile, KeyframeableValue.ResolveInterpolator(valueToClone), out object keyframeData);
+
+									valueToPaste.SetKeyframeValue(projectActionsClonedFrameFromFileDest, keyframeData);
+								}
+							}
+						}
+						catch (Exception e)
+						{
+							Console.WriteLine(e);
+						}
+					}
+					
+					ImGui.EndDisabled();
+
+					ImGui.Separator();
+
+					if (ImGui.Button("Dividir enlaces"))
+					{
+						foreach (TextureAnimationObject animationObject in EditorApplication.State.GraphicEntities.Values)
+						{
+							SplitLinks(animationObject);
+						}
+
+						foreach (HitboxAnimationObject hitboxObject in EditorApplication.State.HitboxEntities.Values)
+						{
+							SplitLinks(hitboxObject);
+						}
+
+						void SplitLinks(IAnimationObject animationObject)
+						{
+							foreach (KeyframeableValue value in animationObject.EnumerateKeyframeableValues())
+							{
+								for (int i = 0; i < value.links.Count; i++)
+								{
+									KeyframeLink link = value.links[i];
+
+									if (link.Count <= 2)
+										continue;
+
+									List<IEnumerable<int>> smallerLinks = new List<IEnumerable<int>>();
+
+									for (int index = 0; index < link.Frames.Count - 1; index++)
+									{
+										int frame = link.Frames[index];
+										int frame2 = link.Frames[index + 1];
+										smallerLinks.Add([frame, frame2]);
+									}
+
+									value.RemoveLink(link);
+
+									foreach (IEnumerable<int> framesToLink in smallerLinks)
+									{
+										value.AddLink(new KeyframeLink(value, framesToLink));
+									}
+								}
+							}
+						}
+					}
 					ImGui.EndPopup();
 				}
 			}
@@ -903,7 +1086,7 @@ namespace Editor.Gui
 								rotation = MathHelper.ToDegrees(rotation);
 
 								if (ImGui.DragFloat(keyframeableValue.Name, ref rotation, 1f, float.MinValue, float.MaxValue, "%.0f deg", ImGuiSliderFlags.NoRoundToFormat))
-									keyframeableValue.SetKeyframeValue(null, MathHelper.ToRadians(rotation), true);
+									keyframeableValue.SetKeyframeValue(null, MathHelper.ToRadians(rotation));
 
 								break;
 							case PropertyNames.TransparencyProperty:
