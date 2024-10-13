@@ -22,11 +22,8 @@ using Rune.MonoGame;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.IO.Compression;
 using System.Linq;
 using System.Runtime.CompilerServices;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 
 using Vector3 = Microsoft.Xna.Framework.Vector3;
 
@@ -128,26 +125,7 @@ namespace Editor
 
 			ExternalActions.AreKeyframesSetOnModify = () => SettingsManager.SetKeyframeOnModify;
 			ExternalActions.AreKeyframesAddedToLinkOnModify = () => SettingsManager.AddKeyframeToLinkOnModify;
-			ExternalActions.GetGraphicsDevice = () => GraphicsDevice;
-			ExternalActions.GetTextureFrameByName = name =>
-			{
-				if (State.Textures.TryGetValue(name, out TextureFrame result))
-					return result;
-
-				return SinglePixel;
-			};
-
-			ExternalActions.GetTextureAnimationObjectByName = name => State.GraphicEntities[name];
-			ExternalActions.GetHitboxAnimationObjectByName = name => State.HitboxEntities[name];
-			ExternalActions.CalculateQuadPoints = GetQuadsPrimitive;
-			ExternalActions.OnRemoveTexture = texture =>
-			{
-				State.Textures.Remove(texture.Name);
-				selectedData.Deselect(texture);
-			};
-
-			ExternalActions.GetCameraZoom = () => Camera.Zoom;
-			ExternalActions.IsHitboxModeActive = () => Timeline.HitboxMode;
+			ExternalActions.GetTextureFrameByName = name => State.Textures.GetValueOrDefault(name, SinglePixel);
 		}
 
 		public static TextureFrame SinglePixel { get; private set; }
@@ -167,9 +145,9 @@ namespace Editor
 		public static void ResetEditor()
 		{
 			if (State?.Textures != null)
-				foreach (TextureFrame texture in State.Textures.Values)
+				foreach (TextureFrame texture in State.Textures.Values.Where(texture => texture.IsBinded))
 				{
-					texture.Remove();
+					TextureManager.UnloadTexture(texture.Path);
 				}
 
 			State = new State();
@@ -207,11 +185,6 @@ namespace Editor
 			Texture2D singlePixelTexture = new Texture2D(GraphicsDevice, 1, 1);
 			ImguiRenderer = new ImGuiRenderer(this);
 
-			ExternalActions.BindTexture = ImguiRenderer.BindTexture;
-			ExternalActions.GetTexture = ImguiRenderer.GetTexture;
-			ExternalActions.UnbindTexture = ImguiRenderer.UnbindTexture;
-			ExternalActions.GetTextureDictionaryForRawUse = () => ImguiRenderer.loadedTextures;
-
 			SinglePixel = new TextureFrame("SinglePixel", singlePixelTexture, new Point(1), null, NVector2.One / 2);
 			IcoMoon.AddIconsToDefaultFont(14f);
 			ImguiRenderer.RebuildFontAtlas();
@@ -239,7 +212,7 @@ namespace Editor
 		{
 			foreach (TextureFrame texturesValue in State.Textures.Values)
 			{
-				texturesValue.Dispose();
+				TextureManager.UnloadTexture(texturesValue.Path);
 			}
 
 			base.UnloadContent();
@@ -347,7 +320,7 @@ namespace Editor
 
 				Vector3 center = new Vector3(position, 0);
 				Vector3 size3d = new Vector3(size, 0);
-				Color color = entity.GetColor();
+				Color color = entity.GetColor().MultiplyRGB(Timeline.HitboxMode ? 1 : 0.5f);
 
 				bool isSelected = selectedData.Contains(entity);
 
@@ -378,7 +351,16 @@ namespace Editor
 
 					// draw launch lines
 
-					(float launchSin, float launchCos) = MathF.SinCos(MathHelper.ToRadians(entity.LaunchAngle));
+					float angle = MathHelper.ToRadians(entity.LaunchAngle);
+
+					if (entity.LaunchPoint.LengthSquared() != 0)
+					{
+						Vector2 diff = entity.LaunchPoint - position;
+						angle = MathF.Atan2(diff.Y, diff.X);
+						primitiveBatch.DrawBox(new Vector3(entity.LaunchPoint, 0), new Vector3(3, 3, 0), Color.Beige, PrimitiveBatch.DrawStyle.Wireframe);
+					}
+
+					(float launchSin, float launchCos) = MathF.SinCos(angle);
 					Vector3 lineEnd;
 
 					if (entity.LaunchPotencyGrowth != 0)
@@ -439,19 +421,20 @@ namespace Editor
 					effects |= SpriteEffects.FlipVertically;
 				}
 
-				TextureFrame texture = State.GetTexture(entity.TextureName);
-				int framesX = texture.Width / texture.FrameSize.X;
+				TextureFrame textureFrame = State.GetTexture(entity.TextureName);
+				Texture2D texture = ImguiRenderer.GetTexture(TextureManager.PathIndexMap[textureFrame.Path].ImguiId);
+				int framesX = texture.Width / textureFrame.FrameSize.X;
 				if (framesX == 0)
 					framesX = 1;
 
 				int x = frameIndex % framesX;
 				int y = frameIndex / framesX;
 
-				Rectangle sourceRect = new Rectangle(texture.FramePosition.X + x * texture.FrameSize.X, texture.FramePosition.Y + y * texture.FrameSize.Y,
-					texture.FrameSize.X, texture.FrameSize.Y);
+				Rectangle sourceRect = new Rectangle(textureFrame.FramePosition.X + x * textureFrame.FrameSize.X, textureFrame.FramePosition.Y + y * textureFrame.FrameSize.Y,
+					textureFrame.FrameSize.X, textureFrame.FrameSize.Y);
 
 				spriteBatch.Draw(texture, position, sourceRect, color,
-					rotation, texture.Pivot,
+					rotation, textureFrame.Pivot,
 					scale, effects, entity.ZIndex.CachedValue);
 			}
 
@@ -472,7 +455,7 @@ namespace Editor
 
 		public static (Vector3 tl, Vector3 tr, Vector3 bl, Vector3 br) GetQuads(float x, float y, float pivotX, float pivotY, float w, float h, float sin, float cos)
 		{
-			GetQuadsPrimitive(x, y, pivotX, pivotY, w, h, sin, cos,
+			MiscellaneousFunctions.GetQuadsPrimitive(x, y, pivotX, pivotY, w, h, sin, cos,
 				out float tlX, out float tlY,
 				out float trX, out float trY,
 				out float blX, out float blY,
@@ -482,21 +465,9 @@ namespace Editor
 			return (new Vector3(tlX, tlY, 0), new Vector3(trX, trY, 0), new Vector3(blX, blY, 0), new Vector3(brX, brY, 0));
 		}
 
-		public static void GetQuadsPrimitive(float x, float y, float pivotX, float pivotY, float w, float h, float sin, float cos, out float tlX, out float tlY, out float trX, out float trY, out float blX, out float blY, out float brX, out float brY)
-		{
-			tlX = x + pivotX * cos - pivotY * sin;
-			tlY = y + pivotX * sin + pivotY * cos;
-			trX = x + (pivotX + w) * cos - pivotY * sin;
-			trY = y + (pivotX + w) * sin + pivotY * cos;
-			blX = x + pivotX * cos - (pivotY + h) * sin;
-			blY = y + pivotX * sin + (pivotY + h) * cos;
-			brX = x + (pivotX + w) * cos - (pivotY + h) * sin;
-			brY = y + (pivotX + w) * sin + (pivotY + h) * cos;
-		}
-
 		public static (NVector2 tl, NVector2 tr, NVector2 bl, NVector2 br) GetQuadsNumeric(float x, float y, float pivotX, float pivotY, float w, float h, float sin, float cos)
 		{
-			GetQuadsPrimitive(x, y, pivotX, pivotY, w, h, sin, cos,
+			MiscellaneousFunctions.GetQuadsPrimitive(x, y, pivotX, pivotY, w, h, sin, cos,
 				out float tlX, out float tlY,
 				out float trX, out float trY,
 				out float blX, out float blY,
@@ -642,7 +613,8 @@ namespace Editor
 
 			foreach (TextureFrame texture in data.textures)
 			{
-				texture.LoadTexture();
+				TextureManager.LoadTexture(texture.Path, out nint id);
+				texture.TextureId = id;
 				State.Textures.Add(texture.Name, texture);
 			}
 
@@ -687,82 +659,6 @@ namespace Editor
 			}
 		}
 	}
-	public record JsonData(bool looping, bool playingForward, bool playingBackwards, int selectedFps, int currentKeyframe, TextureFrame[] textures, TextureAnimationObject[] graphicObjects, HitboxAnimationObject[] hitboxObjects)
-	{
-		[JsonConstructor]
-		public JsonData() : this(false, false, false, 0, 0, Array.Empty<TextureFrame>(), Array.Empty<TextureAnimationObject>(), Array.Empty<HitboxAnimationObject>())
-		{
-		}
-
-		public void Fixup()
-		{
-			foreach (TextureAnimationObject graphicObject in graphicObjects)
-			{
-				foreach (KeyframeableValue keyframeableValue in graphicObject.EnumerateKeyframeableValues())
-				{
-					FixKeyframeableValue(keyframeableValue);
-				}
-			}
-
-			foreach (HitboxAnimationObject hitboxObject in hitboxObjects)
-			{
-				foreach (KeyframeableValue keyframeableValue in hitboxObject.EnumerateKeyframeableValues())
-				{
-					FixKeyframeableValue(keyframeableValue);
-				}
-			}
-		}
-
-		private static void FixKeyframeableValue(KeyframeableValue keyframeableValue)
-		{
-			ResolveKeyframeValue(ref keyframeableValue.DefaultValue, keyframeableValue);
-
-			foreach (Keyframe keyframe in keyframeableValue.keyframes)
-			{
-				keyframe.Value = ResolveKeyframeValue(keyframe.Value, keyframeableValue);
-			}
-
-			foreach (KeyframeLink link in keyframeableValue.links)
-			{
-				link.SanitizeValues();
-			}
-		}
-
-		public static void ResolveKeyframeValue(ref object value, KeyframeableValue containingValue)
-		{
-			value = ResolveKeyframeValue(value, containingValue);
-		}
-
-		public static object ResolveKeyframeValue(object value, KeyframeableValue containingValue)
-		{
-			if (value is int intValue && containingValue is FloatKeyframeValue)
-			{
-				return (float)intValue;
-			}
-
-			return value;
-		}
-
-		public static JsonData LoadFromPath(string filePath)
-		{
-			byte[] text = File.ReadAllBytes(filePath);
-
-			if (BitConverter.ToUInt16(text, 0) == 0x9DD5) // file is compressed
-			{
-				using (MemoryStream stream = new MemoryStream(text))
-				using (DeflateStream deflateStream = new DeflateStream(stream, CompressionMode.Decompress))
-				{
-					using (MemoryStream outputStream = new MemoryStream())
-					{
-						deflateStream.CopyTo(outputStream);
-						text = outputStream.GetBuffer();
-					}
-				}
-			}
-
-			return JsonSerializer.Deserialize<JsonData>(text, SettingsManager.DefaultSerializerOptions);
-		}
-	}
 	public record SelectedLinkData
 	{
 		public SelectedLinkData(KeyframeLink link, string propertyName)
@@ -785,13 +681,14 @@ namespace Editor
 			if (containingValue is null)
 			{
 				Timeline.selectedLink = null;
+
 				return;
 			}
-			
+
 			switch (propertyName)
 			{
 				case PropertyNames.PositionProperty:
-					
+
 					List<Vector2> positions = new List<Vector2>();
 
 					AddDelegateOnce(ref Camera.OnDirty, CalculateExtraData);

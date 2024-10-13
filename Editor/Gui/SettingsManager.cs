@@ -7,13 +7,11 @@ using System.Collections;
 using System.IO;
 using System.IO.Compression;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 
 namespace Editor.Gui
 {
 	public static class SettingsManager
 	{
-
 		public static ImGuiWindowFlags ToolsWindowFlags => LockToolWindows ? ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoDocking : ImGuiWindowFlags.None;
 		public const int SaveFileMagicNumber = 1296649793;
 		public const int AllocatedSettings = 16;
@@ -82,7 +80,7 @@ namespace Editor.Gui
 			using (FileStream stream = File.Open(filePath, FileMode.OpenOrCreate, FileAccess.Write))
 			{
 				stream.Seek(0, SeekOrigin.Begin);
-				byte[] serializedJson = JsonSerializer.SerializeToUtf8Bytes(EditorApplication.GetJsonObject(), DefaultSerializerOptions);
+				byte[] serializedJson = JsonSerializer.SerializeToUtf8Bytes(EditorApplication.GetJsonObject(), JsonData.DefaultSerializerOptions);
 
 				if (CompressOnSave)
 				{
@@ -150,7 +148,7 @@ namespace Editor.Gui
 
 					for (int i = 0; i < settingsFlags.Count; i++)
 					{
-						if (settingsFlags.Get(i)) 
+						if (settingsFlags.Get(i))
 							bytes[i / 8] ^= (byte)(1 << i % 8); // WHAT UFE FUJCKKFDGKNFB
 					}
 

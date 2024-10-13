@@ -1,8 +1,10 @@
-﻿using Editor.Objects;
+﻿using Editor.Graphics;
+using Editor.Objects;
 
 using ImGuiNET;
 
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
 
 using System;
 using System.Collections.Generic;
@@ -23,10 +25,12 @@ namespace Editor.Gui
 		private static float projectActionsKeyframeMult = 1;
 		private static IAnimationObject objectToRename;
 		private static int projectActionsKeyframeToClone = -1, projectActionsKeyframeStart;
-		private static int projectActionsKeyframeMove = 0;
 		private static int projectActionsNewLinkType;
 		private static string projectActionsCloneKeyframePath;
 		private static int projectActionsFrameToCloneFromFile, projectActionsClonedFrameFromFileDest;
+		private static int projectActionsFrameToKeyframeAll;
+		private static int projectActionsFrameToMoveAfter;
+		private static int projectActionsFramesToMove;
 
 		public static void Draw()
 		{
@@ -317,7 +321,7 @@ namespace Editor.Gui
 						{
 							foreach (KeyframeableValue value in hitboxObject.EnumerateKeyframeableValues())
 							{
-								if (!KeyframeableValue.Interpolate(value, projectActionsKeyframeToClone, KeyframeableValue.ResolveInterpolator(value.DefaultValue.GetType()), out object storedValue))
+								if (!KeyframeableValue.Interpolate(value, projectActionsKeyframeToClone, KeyframeableValue.ResolveInterpolator(value), out object storedValue))
 								{
 									storedValue = value.DefaultValue;
 								}
@@ -371,7 +375,7 @@ namespace Editor.Gui
 								{
 									IEnumerable<Keyframe> loneKeyframes = value.keyframes.Where(v => KeyframeableValue.FindContainingLink(v.ContainingValue, v) is null);
 
-									if (loneKeyframes.Count() > 1)
+									if (loneKeyframes.Any())
 									{
 										value.AddLink(new KeyframeLink(value, loneKeyframes)
 										{
@@ -491,7 +495,7 @@ namespace Editor.Gui
 							Console.WriteLine(e);
 						}
 					}
-					
+
 					ImGui.EndDisabled();
 
 					ImGui.Separator();
@@ -538,6 +542,98 @@ namespace Editor.Gui
 							}
 						}
 					}
+
+					ImGui.Separator();
+
+					ImGui.InputInt("Fotograma a keyframear", ref projectActionsFrameToKeyframeAll);
+
+					if (ImGui.Button("Asignar fotograma clave"))
+					{
+						foreach (TextureAnimationObject animationObject in EditorApplication.State.GraphicEntities.Values)
+						{
+							Keyframe(animationObject);
+						}
+
+						foreach (HitboxAnimationObject hitboxObject in EditorApplication.State.HitboxEntities.Values)
+						{
+							Keyframe(hitboxObject);
+						}
+
+						void Keyframe(IAnimationObject animationObject)
+						{
+							foreach (KeyframeableValue value in animationObject.EnumerateKeyframeableValues())
+							{
+								KeyframeableValue.Interpolate(value, projectActionsFrameToKeyframeAll, KeyframeableValue.ResolveInterpolator(value), out object interpolatedValue);
+
+								value.SetKeyframeValue(projectActionsFrameToKeyframeAll, interpolatedValue);
+							}
+						}
+
+						projectActionsFrameToKeyframeAll = -1;
+					}
+
+					ImGui.Separator();
+
+					ImGui.InputInt("Inicio de seleccion", ref projectActionsFrameToMoveAfter);
+
+					ImGui.InputInt("Fotogramas mover", ref projectActionsFramesToMove);
+
+					ImGui.BeginDisabled(projectActionsFramesToMove <= 0);
+
+					if (ImGui.Button("Mover fotogramas clave despues de un fotograma especifico"))
+					{
+						foreach (TextureAnimationObject animationObject in EditorApplication.State.GraphicEntities.Values)
+						{
+							MoveKeyframes(animationObject);
+						}
+
+						foreach (HitboxAnimationObject hitboxObject in EditorApplication.State.HitboxEntities.Values)
+						{
+							MoveKeyframes(hitboxObject);
+						}
+
+						void MoveKeyframes(IAnimationObject animationObject)
+						{
+							foreach (KeyframeableValue value in animationObject.EnumerateKeyframeableValues())
+							{
+								for (int index = 0; index < value.keyframes.Count; index++)
+								{
+									Keyframe keyframe = value.keyframes[index];
+
+									if (keyframe.Frame < projectActionsFrameToMoveAfter)
+										continue;
+
+									keyframe.Frame += projectActionsFramesToMove;
+								}
+
+								foreach (KeyframeLink link in value.links)
+								{
+									int[] frames = link.Frames.ToArray();
+
+									for (int i = 0; i < link.Count; i++)
+									{
+										ref int frame = ref frames[i];
+
+										if (frame < projectActionsFrameToMoveAfter)
+											continue;
+
+										frame += projectActionsFramesToMove;
+									}
+
+									link.Clear();
+
+									link.AddRange(frames);
+									link.Sort();
+								}
+							}
+						}
+
+						projectActionsFrameToMoveAfter = 0;
+						projectActionsFramesToMove = 0;
+					}
+
+					ImGui.EndDisabled();
+
 					ImGui.EndPopup();
 				}
 			}
@@ -651,7 +747,8 @@ namespace Editor.Gui
 				{
 					if (ImGui.Button($"{IcoMoon.MinusIcon} Borrar"))
 					{
-						texture.Remove();
+						EditorApplication.State.Textures.Remove(texture.Name);
+						EditorApplication.selectedData.Deselect(texture);
 
 						ImGui.CloseCurrentPopup();
 						ImGui.EndPopup();
@@ -851,6 +948,7 @@ namespace Editor.Gui
 		public static void OpenRenamePopup(IAnimationObject obj)
 		{
 			objectToRename = obj;
+			ImGui.OpenPopup("Rename object");
 		}
 
 		private static bool DrawGraphicEntitiesHierarchy()
@@ -1073,9 +1171,10 @@ namespace Editor.Gui
 							case PropertyNames.FrameIndexProperty:
 								int frameIndex = ((IntKeyframeValue)keyframeableValue).CachedValue;
 
-								TextureFrame texture = EditorApplication.State.GetTexture(textureObject.TextureName);
-								int framesX = (texture.Width - texture.FramePosition.X) / texture.FrameSize.X;
-								int framesY = (texture.Height - texture.FramePosition.Y) / texture.FrameSize.Y;
+								TextureFrame textureFrame = EditorApplication.State.GetTexture(textureObject.TextureName);
+								Texture2D texture = TextureManager.GetTexture(textureFrame.Path);
+								int framesX = (texture.Width - textureFrame.FramePosition.X) / textureFrame.FrameSize.X;
+								int framesY = (texture.Height - textureFrame.FramePosition.Y) / textureFrame.FrameSize.Y;
 
 								if (ImGui.SliderInt(keyframeableValue.Name, ref frameIndex, 0, framesX * framesY - 1))
 									keyframeableValue.SetKeyframeValue(null, frameIndex);
@@ -1223,6 +1322,7 @@ namespace Editor.Gui
 							ImGui.DragFloat("Launch Potency", ref hitboxObject.LaunchPotency);
 							ImGui.DragFloat("Launch Potency Growth", ref hitboxObject.LaunchPotencyGrowth);
 							ImGui.DragFloat("Launch Potency Max", ref hitboxObject.LaunchPotencyMax);
+							ImGui.DragFloat2("Launch Point (Zero for unused)", ref hitboxObject.LaunchPoint);
 
 							DragUshort("ShieldStun", ref hitboxObject.ShieldStun);
 							DragAngleWithWidget("Shield Launch Angle", ref hitboxObject.ShieldLaunchAngle, f => hitboxObject.ShieldLaunchAngle = f);
@@ -1231,6 +1331,7 @@ namespace Editor.Gui
 							DragUshort("DuelGameLag", ref hitboxObject.DuelGameLag);
 							DragUshort("AttackId", ref hitboxObject.AttackId);
 							DragUshort("ImmunityAfterHit", ref hitboxObject.ImmunityAfterHit);
+							ImGui.DragFloat("Movement influence", ref hitboxObject.MovementInfluence);
 
 							break;
 						case HitboxType.Windbox:
@@ -1281,10 +1382,12 @@ namespace Editor.Gui
 						currentPivot = new NVector2(currentFrameSize.X / 2f, currentFrameSize.Y / 2f);
 					}
 
+					Texture2D texture = TextureManager.GetTexture(selectedTexture.Path);
+
 					if (ImGui.Button("Reset all texture settings\nand data"))
 					{
-						currentPivot = new NVector2(selectedTexture.Width / 2f, selectedTexture.Height / 2f);
-						currentFrameSize = selectedTexture.Size;
+						currentPivot = new NVector2(texture.Width / 2f, texture.Height / 2f);
+						currentFrameSize = new Point(texture.Width, texture.Height);
 						currentFramePosition = Point.Zero;
 
 						PivotViewerZoom = 1f;
@@ -1332,7 +1435,8 @@ namespace Editor.Gui
 						ImDrawListPtr drawList = ImGui.GetWindowDrawList();
 
 						// draw texture for reference
-						NVector2 size = selectedTexture.Size.ToVector2().ToNumerics();
+
+						NVector2 size = new NVector2(texture.Width, texture.Height);
 						NVector2 scaledSize = size * PivotViewerZoom;
 
 						NVector2 relativeTopLeft = -scaledFramePosition;
